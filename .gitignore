@@ -24,3 +24,8 @@ venv/
 
 # Harness / editor
 .claude/
+.ipynb_checkpoints/
+Untitled Folder/
+
+# Reference docs kept locally, not in the repo
+*.pdf
