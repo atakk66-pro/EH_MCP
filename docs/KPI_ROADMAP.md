@@ -102,12 +102,25 @@ Recommended Phase 1 tools to build first, each returning only aggregates/counts
 - `training_compliance(..., cert_set='mandatory'|'safety')` → per-service
   compliance % and expiring-soon count.
 
+## Confirmed from the Developer Portal scope list
+
+The "Add New Application" scope list (EH Controls API.pdf) resolves two earlier
+uncertainties:
+
+- **Timesheets and rosters are in this Controls API**, not only the separate
+  KeyPay Payroll product. `Timesheet entries`, `Rostered shifts`, and
+  `Pay categories` are all selectable Read scopes here, so the Phase 2 hours data
+  (care hours, overtime, delivery, lateness) is reachable with the same token.
+  Overtime classification still needs the pay-category mapping (B5).
+- **Departments and Positions are not readable** (Update/Create scopes only, no
+  Read). So the `list_departments` tool will 403, and "department" cannot be the
+  service grouping. Use Teams, Work locations, or Cost centres. Leave categories
+  *are* readable, which helps confirm the sickness/annual mapping (B7).
+
 ## Key uncertainties to verify first
 
-- **Timesheets/roster location.** Research disagreed on whether
-  `timesheet_entries` / `rostered_shifts` are exposed in the v1 HR API or only in
-  the separate Payroll product. This decides whether overtime / care-hours sit in
-  Phase 1 (degraded) or Phase 2. Check what your HR token can actually read.
+- **Exact scope URN strings.** The portal shows friendly names; confirm the
+  `urn:...` identifiers on the app Review/detail page for `EH_SCOPES`.
 - **Field names.** `start_date`, `termination_date`, `probation_length`,
   `trial_or_probation_type`, `leave_category_name`, `total_hours`, cert
   `expiry_date`/`status`, and the `{"data": {"items": [...]}}` envelope are all

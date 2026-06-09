@@ -21,7 +21,10 @@ from typing import Any
 import yaml
 
 DEFAULT_PATH = os.environ.get("EH_KPI_CONFIG", "kpi_config.yaml")
-ALLOWED_GROUPINGS = ("team", "department", "work_location", "cost_centre")
+# department and position are NOT readable via the Controls API (no Read scope —
+# only Update/Create), so they cannot be a service grouping. Confirmed from the
+# Developer Portal "Add New Application" scope list.
+ALLOWED_GROUPINGS = ("team", "work_location", "cost_centre")
 ALLOWED_ATTRITION_MODES = ("fixed_days", "within_probation")
 
 _KNOWN_TOP_LEVEL = {
