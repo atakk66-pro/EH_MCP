@@ -56,9 +56,79 @@ an allowlist model.
   app registration in the Developer Portal is not available.
 - A registered app in the
   [Developer Portal](https://developer.employmenthero.com/) giving you a
-  **Client ID** and **Client Secret**, with a redirect URI of
-  `http://localhost:8765/callback` (or whatever you set in `EH_REDIRECT_URI`).
-- Python 3.10+.
+  **Client ID** and **Client Secret**. See [Employment Hero app
+  setup](#employment-hero-app-setup) for the exact redirect URI, scopes, and the
+  admin role required.
+- Python 3.10+ (only for the manual install; the `.mcpb` extension provisions
+  Python itself).
+
+## Employment Hero app setup
+
+Register one app in the Developer Portal ("Add New Application"). The same app
+(one Client ID + Secret) is shared by every director; each person authorizes
+themselves.
+
+### Redirect URI
+
+Enter exactly:
+
+```
+http://localhost:8765/callback
+```
+
+If the portal rejects `http`/`localhost`, use `http://127.0.0.1:8765/callback`
+instead. Whatever you enter here must match the extension's sign-in callback
+port (default 8765) and `EH_REDIRECT_URI` in the manual install. It is the local
+address the one-time browser sign-in listens on.
+
+### Administrator role required
+
+Whoever does the one-time "connect Employment Hero" sign-in must be an
+Employment Hero **administrator**, or have access to the relevant modules via
+Permissions. Almost every scope below sits under the portal's "Administrator
+Role Required" group. Only `Organisations -> Read` works for a standard user.
+
+### API scopes to tick (all Read only)
+
+Scopes are immutable once the app is saved, so tick everything below now. Adding
+one later means creating a new app and re-authorizing.
+
+**Phase 1 — the first KPIs and the current read tools:**
+
+| Portal scope | Read | Used for |
+|--------------|:----:|----------|
+| Organisations | ✓ | list organisations (this one is in the "User" section) |
+| Employees | ✓ | turnover, retention, tenure, probation, headcount |
+| Employees certifications | ✓ | training compliance per employee |
+| Certifications | ✓ | organisation certification list |
+| Leave requests | ✓ | sickness, Bradford Factor, absence |
+| Leave categories | ✓ | map which categories count as sickness/annual |
+| Leave balances | ✓ | annual leave vs target |
+| Teams | ✓ | "by service" grouping (default) |
+| Work locations | ✓ | alternative "by service" grouping |
+| Cost centres | ✓ | alternative "by service" grouping |
+
+**Phase 2 — hours/overtime (in this same Controls API). Tick now, since scopes
+can't be added later:**
+
+| Portal scope | Read | Used for |
+|--------------|:----:|----------|
+| Timesheet entries | ✓ | total care hours, overtime |
+| Rostered shifts | ✓ | delivery vs rostered, lateness |
+| Pay categories | ✓ | classifying overtime / agency hours |
+
+**Leave UNTICKED (personal data the server never needs):** Bank accounts,
+Documents, Emergency contacts, Pay details, Payslips, Tax declaration,
+Superannuation (detail and fund), Work eligibility, Employee custom fields,
+Employee form responses, Job histories.
+
+Notes:
+- **Departments and Positions have no Read scope** (only Update/Create), so they
+  cannot be used as the "by service" grouping. Use Teams, Work locations, or
+  Cost centres.
+- The portal shows friendly names; the exact `urn:...` scope strings appear on
+  the app's Review / detail page. Copy them into `EH_SCOPES` (manual install) or
+  the extension's "scopes" field so the sign-in request matches.
 
 ## Install (recommended: Desktop Extension)
 
