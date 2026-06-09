@@ -60,37 +60,45 @@ an allowlist model.
   `http://localhost:8765/callback` (or whatever you set in `EH_REDIRECT_URI`).
 - Python 3.10+.
 
-## Setup
+## Install (recommended: Desktop Extension)
+
+For non-technical users (directors), distribute the packaged `.mcpb` so install
+is click-through, with no Python, `pip`, or config files. Full step-by-step:
+[docs/INSTALL.md](docs/INSTALL.md). In short:
+
+1. Build the bundle once (you, the maintainer):
+   ```bash
+   npx -y @anthropic-ai/mcpb pack .
+   ```
+   This produces `employment-hero-readonly.mcpb` (~20 KB; uses the `uv` server
+   type, so Claude Desktop provisions Python and dependencies itself).
+2. Send that one file to each director.
+3. They open Claude Desktop, go to Settings > Extensions, install the `.mcpb`,
+   and paste the **Client ID** and **Client Secret** in the dialog (stored in
+   their OS keychain, not a file).
+4. In chat they say "connect Employment Hero" once. The `connect_employment_hero`
+   tool opens their browser to approve read-only access, then stores their
+   personal refresh token locally (`~/.eh_mcp/token.json`, mode 600). Each
+   machine connects independently, which is what Employment Hero's refresh-token
+   rotation requires.
+
+The same Client ID/Secret are shared across directors (one EH app); each person
+authorizes themselves. Until connected, the data tools return a friendly "not
+connected" prompt so Claude walks them through it.
+
+## Advanced: manual install (developers)
 
 ```bash
-# from the project root
 pip install -e .
-
-cp .env.example .env
-# edit .env: set EH_CLIENT_ID and EH_CLIENT_SECRET
-
-# one-time browser authorization; writes the refresh token to EH_TOKEN_FILE
-python scripts/authorize.py
+cp .env.example .env          # set EH_CLIENT_ID and EH_CLIENT_SECRET
+python scripts/authorize.py   # one-time browser sign-in (same flow as the tool)
+python -m eh_mcp              # stdio server
 ```
 
-`authorize.py` opens the Employment Hero consent screen, captures the
-authorization code on a local callback, and stores the rotating refresh token
-(default `~/.eh_mcp/token.json`, mode 600). The server uses that refresh token
-to mint 15-minute access tokens at runtime and rewrites the file each time
-Employment Hero rotates it.
-
-## Run it
-
-```bash
-python -m eh_mcp        # stdio server; Ctrl-C to stop
-```
-
-### Wire it into Claude Desktop
-
-Add this to `claude_desktop_config.json` (on Linux:
+Then add it to `claude_desktop_config.json` (Linux:
 `~/.config/Claude/claude_desktop_config.json`; macOS:
-`~/Library/Application Support/Claude/claude_desktop_config.json`). Use the
-absolute path to the Python interpreter that has the package installed:
+`~/Library/Application Support/Claude/claude_desktop_config.json`), pointing
+`command` at the Python interpreter that has the package installed:
 
 ```json
 {
@@ -108,8 +116,6 @@ absolute path to the Python interpreter that has the package installed:
   }
 }
 ```
-
-Restart Claude Desktop. The tools appear under the `employment-hero` server.
 
 Note: Claude Desktop is officially supported on macOS and Windows. On Linux the
 config path above is the community convention.

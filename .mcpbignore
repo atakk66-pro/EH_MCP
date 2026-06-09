@@ -1,0 +1,38 @@
+# Keep the .mcpb bundle small and free of secrets/junk.
+# Packed contents should be: manifest.json, pyproject.toml, README.md,
+# kpi_config.example.yaml, and src/eh_mcp/*.py
+
+# Secrets and per-user state — must never ship
+.env
+.env.*
+token.json
+.eh_token.json
+.eh_mcp/
+kpi_config.yaml
+
+# Python build/cache artefacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Dev-only
+tests/
+scripts/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.github/
+docs/
+
+# Repo / editor / local clutter
+.git/
+.gitignore
+.claude/
+.ipynb_checkpoints/
+Untitled Folder/
+*.pdf

@@ -1,0 +1,77 @@
+{
+  "manifest_version": "0.4",
+  "name": "employment-hero-readonly",
+  "display_name": "Employment Hero (read-only)",
+  "version": "0.1.0",
+  "description": "Read-only Employment Hero access for Claude Desktop: aggregate, PII-minimising HR figures for care directors.",
+  "long_description": "Connects Claude to your Employment Hero account, read-only. After installing, ask Claude to \"connect Employment Hero\" once to approve access in your browser, then ask for organisation, team, and work-location lists and headcount. No write access, and no individual employee fields (names, contact details, pay) are ever returned.",
+  "author": {
+    "name": "EH Noblecare",
+    "email": "arantakhar@hotmail.co.uk"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "python": ">=3.10"
+    }
+  },
+  "server": {
+    "type": "uv",
+    "entry_point": "src/eh_mcp/__main__.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "python", "-m", "eh_mcp"],
+      "env": {
+        "PYTHONPATH": "${__dirname}/src",
+        "EH_CLIENT_ID": "${user_config.client_id}",
+        "EH_CLIENT_SECRET": "${user_config.client_secret}",
+        "EH_REDIRECT_URI": "http://localhost:${user_config.redirect_port}/callback",
+        "EH_SCOPES": "${user_config.scopes}",
+        "EH_TOKEN_FILE": "${HOME}/.eh_mcp/token.json"
+      }
+    }
+  },
+  "tools": [
+    {"name": "connect_employment_hero", "description": "One-time browser sign-in to Employment Hero."},
+    {"name": "connection_status", "description": "Report whether Employment Hero is connected."},
+    {"name": "list_organisations", "description": "List organisations (id and name only)."},
+    {"name": "list_teams", "description": "List teams in an organisation."},
+    {"name": "list_departments", "description": "List departments in an organisation."},
+    {"name": "list_work_locations", "description": "List work locations in an organisation."},
+    {"name": "employee_count", "description": "Total employee count for an organisation."}
+  ],
+  "user_config": {
+    "client_id": {
+      "type": "string",
+      "title": "Employment Hero Client ID",
+      "description": "From your Employment Hero Developer Portal app.",
+      "sensitive": true,
+      "required": true
+    },
+    "client_secret": {
+      "type": "string",
+      "title": "Employment Hero Client Secret",
+      "description": "From your Employment Hero Developer Portal app. Stored in your OS keychain.",
+      "sensitive": true,
+      "required": true
+    },
+    "scopes": {
+      "type": "string",
+      "title": "Read-only scopes (space-separated)",
+      "description": "Must match the read scopes ticked on your EH app. Leave as default unless your app differs.",
+      "required": false,
+      "default": "urn:mainapp:organisations:read urn:mainapp:employees:read"
+    },
+    "redirect_port": {
+      "type": "number",
+      "title": "Sign-in callback port",
+      "description": "Local port used during browser sign-in. Must match the redirect URI registered on your EH app (default 8765).",
+      "required": false,
+      "default": 8765,
+      "min": 1024,
+      "max": 65535
+    }
+  }
+}

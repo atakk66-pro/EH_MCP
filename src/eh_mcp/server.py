@@ -13,10 +13,11 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
-from .auth import TokenManager
+from .auth import TokenManager, has_stored_token
 from .client import EHClient
 from .config import load_settings
 from .models import NamedEntity, Organisation, to_named, to_org
+from .oauth_flow import OAuthFlowError, run_authorization_flow
 
 logger = logging.getLogger("eh_mcp.tools")
 
@@ -33,6 +34,47 @@ def _get_client() -> EHClient:
         settings = load_settings()
         _client = EHClient(settings, TokenManager(settings))
     return _client
+
+
+@mcp.tool()
+def connect_employment_hero() -> str:
+    """Sign in to Employment Hero. Run this once before asking for any data.
+
+    Opens your browser to approve read-only access. After you approve, this
+    machine stays connected and you will not need to do it again.
+    """
+    logger.info("tool connect_employment_hero")
+    try:
+        settings = load_settings()
+    except RuntimeError as exc:
+        return f"Cannot connect: {exc}"
+    try:
+        run_authorization_flow(settings)
+    except OAuthFlowError as exc:
+        return f"Could not connect to Employment Hero: {exc}"
+    # Drop any cached client so the next call picks up the new token.
+    global _client
+    _client = None
+    return (
+        "Connected to Employment Hero. You can now ask for organisations, teams, "
+        "work locations, and headcount."
+    )
+
+
+@mcp.tool()
+def connection_status() -> str:
+    """Report whether this machine is signed in to Employment Hero."""
+    logger.info("tool connection_status")
+    try:
+        settings = load_settings()
+    except RuntimeError as exc:
+        return f"Not configured: {exc}"
+    if has_stored_token(settings.token_file):
+        return "Connected to Employment Hero."
+    return (
+        "Not connected to Employment Hero yet. Ask me to connect Employment Hero "
+        "to sign in."
+    )
 
 
 @mcp.tool()

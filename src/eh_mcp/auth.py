@@ -29,6 +29,30 @@ class TokenError(RuntimeError):
     """Raised when a token cannot be loaded, refreshed, or stored."""
 
 
+def store_refresh_token(path: str, refresh_token: str) -> None:
+    """Atomically write the refresh token to ``path`` with 0600 permissions."""
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w") as f:
+        json.dump({"refresh_token": refresh_token}, f)
+    os.replace(tmp, path)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def has_stored_token(path: str) -> bool:
+    """True if ``path`` holds a usable refresh token (used for connection status)."""
+    if not os.path.exists(path):
+        return False
+    try:
+        with open(path) as f:
+            return bool(json.load(f).get("refresh_token"))
+    except (OSError, ValueError):
+        return False
+
+
 class TokenManager:
     def __init__(self, settings: Settings) -> None:
         self._s = settings
@@ -86,8 +110,8 @@ class TokenManager:
         path = self._s.token_file
         if not os.path.exists(path):
             raise TokenError(
-                f"No token file at {path}. Run `python scripts/authorize.py` once "
-                "to authorize the integration."
+                "Employment Hero is not connected yet. Ask me to connect Employment "
+                "Hero (the connect_employment_hero tool) to sign in, then try again."
             )
         with open(path) as f:
             data = json.load(f)
@@ -97,13 +121,4 @@ class TokenManager:
         return refresh_token
 
     def _store_refresh_token(self, refresh_token: str) -> None:
-        path = self._s.token_file
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        tmp = f"{path}.tmp"
-        with open(tmp, "w") as f:
-            json.dump({"refresh_token": refresh_token}, f)
-        os.replace(tmp, path)
-        try:
-            os.chmod(path, 0o600)
-        except OSError:
-            pass
+        store_refresh_token(self._s.token_file, refresh_token)

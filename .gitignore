@@ -29,3 +29,6 @@ Untitled Folder/
 
 # Reference docs kept locally, not in the repo
 *.pdf
+
+# Built extension bundle (regenerate with `mcpb pack .`)
+*.mcpb
