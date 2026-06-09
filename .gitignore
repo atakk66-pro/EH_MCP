@@ -1,0 +1,23 @@
+# Secrets and tokens — never commit
+.env
+.eh_token.json
+token.json
+.eh_mcp/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Test / tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Harness / editor
+.claude/
