@@ -1,0 +1,61 @@
+# Directors-supplied KPI configuration for the Employment Hero KPI server.
+#
+# None of this lives in Employment Hero, so it is provided here. Copy this file
+# to kpi_config.yaml (gitignored) and fill it in, or point EH_KPI_CONFIG at it.
+#
+# IDs and names only. NEVER put personal data in this file.
+#
+# Validate it any time with:  python -m eh_mcp.kpi_config kpi_config.yaml
+
+# Which Employment Hero dimension represents a "service" (a care home, branch,
+# or domiciliary round). Every "by service" KPI groups on this. If you are not
+# sure which one your tenant uses, leave the default and confirm it against the
+# live data once you have an API token.
+# One of: team | department | work_location | cost_centre
+service_grouping: team
+
+# Leave category NAMES exactly as they appear in Employment Hero that count as
+# sickness absence. EH returns a category name, not a sick/annual flag, so this
+# mapping is required for sickness rate, long-term absence, and Bradford Factor.
+sickness_categories:
+  - "Sick Leave"
+  - "Sickness"
+
+# Leave category names that count as annual / holiday leave (for annual leave
+# vs target).
+annual_leave_categories:
+  - "Annual Leave"
+
+# Certification names (or types) that count as MANDATORY training and as SAFETY
+# certs. These are the denominators for the training-compliance KPIs.
+mandatory_cert_names:
+  - "Safeguarding"
+  - "Moving and Handling"
+  - "Infection Prevention and Control"
+safety_cert_names:
+  - "Fire Safety"
+  - "First Aid"
+
+# Thresholds and definitions used by the KPIs.
+thresholds:
+  early_attrition_window_days: 180   # a leaver is "early" if tenure <= this
+  early_attrition_mode: fixed_days   # fixed_days | within_probation
+  long_term_absence_days: 28         # a sick spell >= this is long-term
+  bradford_period_weeks: 52          # rolling window for Bradford Factor
+  cert_expiry_warning_days: 30       # "expiring soon" window for certs
+  lateness_grace_minutes: 5          # clock-on later than rostered + grace = late
+
+# Per-service targets, budgets, and establishment. Needed by the Phase 4 KPIs
+# (vacancy rate, budgeted-hours variance, annual leave vs target, delivery vs
+# commissioned hours). Keyed by the Employment Hero ID of whatever
+# service_grouping you chose above. All numbers, no personal data. Optional
+# until those KPIs are built; vacancy rate cannot be computed without
+# establishment_headcount.
+services:
+  - id: "REPLACE_WITH_EH_TEAM_ID"
+    name: "Example Care Home"
+    establishment_headcount: 40
+    establishment_fte: 35.0
+    budgeted_hours_per_period: 6000
+    contracted_hours_per_period: 5800
+    leave_entitlement_days: 28

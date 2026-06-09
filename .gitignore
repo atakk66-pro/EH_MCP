@@ -4,6 +4,9 @@
 token.json
 .eh_mcp/
 
+# Directors' filled-in KPI config (org-specific; example is committed)
+kpi_config.yaml
+
 # Python
 __pycache__/
 *.py[cod]

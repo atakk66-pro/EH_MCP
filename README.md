@@ -4,6 +4,14 @@ A local [Model Context Protocol](https://modelcontextprotocol.io) server that
 exposes a small set of **read-only** Employment Hero queries to Claude Desktop,
 while keeping personal data out of the model.
 
+The goal is a director-level HR KPI layer (turnover, sickness, Bradford Factor,
+training compliance, and so on), all computed server-side and surfaced only as
+per-service aggregates. See [docs/KPI_ROADMAP.md](docs/KPI_ROADMAP.md) for what
+is buildable now, what needs a second integration, and what needs figures only
+the directors hold. The current code is the read-only foundation plus the
+[config layer](#kpi-configuration) those KPIs depend on; the KPI tools land once
+the schema is verified against a live token.
+
 ## What it does, and what it deliberately does not
 
 It exposes organisation-structure data (organisations, teams, departments, work
@@ -106,6 +114,25 @@ Restart Claude Desktop. The tools appear under the `employment-hero` server.
 Note: Claude Desktop is officially supported on macOS and Windows. On Linux the
 config path above is the community convention.
 
+## KPI configuration
+
+Many KPIs depend on facts that do not exist in Employment Hero: which dimension
+is a "service", which leave categories are sickness, which certificates are
+mandatory, and per-service establishment/budget/target figures. These are
+supplied in a directors-maintained YAML file.
+
+```bash
+cp kpi_config.example.yaml kpi_config.yaml
+# edit kpi_config.yaml for your tenant, then validate it:
+python -m eh_mcp.kpi_config kpi_config.yaml
+```
+
+The real `kpi_config.yaml` is gitignored (it is org-specific); the example is
+committed. It holds IDs, names, and numbers only, never personal data. Point
+`EH_KPI_CONFIG` at a different path if you keep it elsewhere. The KPI tools that
+consume this config are not built yet; see
+[docs/KPI_ROADMAP.md](docs/KPI_ROADMAP.md).
+
 ## Tests
 
 ```bash
@@ -113,8 +140,9 @@ pip install -e ".[dev]"
 pytest
 ```
 
-The test suite checks the allowlist: a raw record carrying personal fields must
-map to only `{id, name}`.
+The suite covers the allowlist (a raw record with personal fields maps to only
+`{id, name}`), the HTTP client (pagination, retries, error translation), the
+token manager (refresh and rotation), and the KPI config loader.
 
 ## Caveats to verify against the live API
 
