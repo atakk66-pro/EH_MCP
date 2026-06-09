@@ -74,7 +74,9 @@ def main() -> None:
     )
 
     server = http.server.HTTPServer((host, port), _CallbackHandler)
-    threading.Thread(target=server.handle_request, daemon=True).start()
+    # serve_forever (not handle_request) so unrelated requests the browser may
+    # send first, e.g. /favicon.ico, do not consume the one callback we need.
+    threading.Thread(target=server.serve_forever, daemon=True).start()
 
     print("Opening your browser to authorize the integration.")
     print(f"If it does not open, visit this URL manually:\n\n{authorize_url}\n")
@@ -85,6 +87,7 @@ def main() -> None:
         if "code" in _result or "error" in _result:
             break
         time.sleep(0.5)
+    server.shutdown()
 
     if "error" in _result:
         sys.exit(f"Authorization error from Employment Hero: {_result['error']}")
