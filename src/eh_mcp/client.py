@@ -1,7 +1,8 @@
 """Thin read-only HTTP client for the Employment Hero REST API.
 
 Only GET requests are made. The client handles pagination and the common
-response envelope, and re-authenticates once on a 401.
+response envelope, retries transient failures (401 re-auth, 429 and 5xx with
+backoff), and translates other failures into clean EHError messages.
 
 Response shape assumption: list endpoints return
 
@@ -13,6 +14,8 @@ Verify against the live API reference for your account before relying on it.
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import Iterator
 from typing import Any
 
@@ -20,15 +23,48 @@ import httpx
 
 from .auth import TokenManager
 from .config import Settings
+from .errors import translate_http_error
+
+logger = logging.getLogger("eh_mcp.client")
 
 _MAX_ITEM_PER_PAGE = 100  # documented maximum; verify against live docs
+_MAX_RETRIES = 3  # for 429 and 5xx
+_MAX_BACKOFF_SECONDS = 30.0
+
+
+def _sleep(seconds: float) -> None:
+    # Indirection so tests can patch out the real delay.
+    time.sleep(seconds)
+
+
+def _backoff_seconds(attempt: int) -> float:
+    return min(2.0**attempt, _MAX_BACKOFF_SECONDS)
+
+
+def _retry_after_seconds(resp: httpx.Response, attempt: int) -> float:
+    header = resp.headers.get("Retry-After")
+    if header:
+        try:
+            return min(float(header), _MAX_BACKOFF_SECONDS)
+        except ValueError:
+            pass
+    return _backoff_seconds(attempt)
 
 
 class EHClient:
-    def __init__(self, settings: Settings, tokens: TokenManager) -> None:
+    def __init__(
+        self,
+        settings: Settings,
+        tokens: TokenManager,
+        *,
+        transport: httpx.BaseTransport | None = None,
+    ) -> None:
         self._s = settings
         self._tokens = tokens
-        self._http = httpx.Client(base_url=settings.api_base, timeout=30.0)
+        # transport is an injection point for tests (httpx.MockTransport).
+        self._http = httpx.Client(
+            base_url=settings.api_base, timeout=30.0, transport=transport
+        )
 
     def close(self) -> None:
         self._http.close()
@@ -42,13 +78,44 @@ class EHClient:
         }
 
     def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
-        resp = self._http.get(path, params=params, headers=self._headers())
-        if resp.status_code == 401:
-            # Access token may have expired between requests. Refresh once.
-            self._tokens.invalidate()
+        attempt = 0
+        reauthed = False
+        while True:
             resp = self._http.get(path, params=params, headers=self._headers())
-        resp.raise_for_status()
-        return resp.json()
+            status = resp.status_code
+
+            if status == 200:
+                logger.info("GET %s -> 200 (%d bytes)", path, len(resp.content))
+                return resp.json()
+
+            if status == 401 and not reauthed:
+                # Access token may have expired between requests; refresh once.
+                logger.info("GET %s -> 401, refreshing token and retrying", path)
+                self._tokens.invalidate()
+                reauthed = True
+                continue
+
+            transient = status == 429 or 500 <= status < 600
+            if transient and attempt < _MAX_RETRIES:
+                delay = (
+                    _retry_after_seconds(resp, attempt)
+                    if status == 429
+                    else _backoff_seconds(attempt)
+                )
+                logger.warning(
+                    "GET %s -> %d, backing off %.1fs (attempt %d/%d)",
+                    path,
+                    status,
+                    delay,
+                    attempt + 1,
+                    _MAX_RETRIES,
+                )
+                _sleep(delay)
+                attempt += 1
+                continue
+
+            logger.error("GET %s -> %d, giving up", path, status)
+            raise translate_http_error(status)
 
     # -- envelope helpers ------------------------------------------------
 

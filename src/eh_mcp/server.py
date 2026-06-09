@@ -7,12 +7,18 @@ for the model to call.
 
 from __future__ import annotations
 
+import logging
+import os
+import sys
+
 from mcp.server.fastmcp import FastMCP
 
 from .auth import TokenManager
 from .client import EHClient
 from .config import load_settings
 from .models import NamedEntity, Organisation, to_named, to_org
+
+logger = logging.getLogger("eh_mcp.tools")
 
 mcp = FastMCP("employment-hero-readonly")
 
@@ -35,6 +41,7 @@ def list_organisations() -> list[Organisation]:
 
     Returns only id and name. No personal data.
     """
+    logger.info("tool list_organisations")
     client = _get_client()
     return [to_org(r) for r in client.paginate("/api/v1/organisations")]
 
@@ -45,6 +52,7 @@ def list_teams(organisation_id: str) -> list[NamedEntity]:
 
     Returns only each team's id and name. No personal data.
     """
+    logger.info("tool list_teams organisation_id=%s", organisation_id)
     client = _get_client()
     path = f"/api/v1/organisations/{organisation_id}/teams"
     return [to_named(r) for r in client.paginate(path)]
@@ -56,6 +64,7 @@ def list_departments(organisation_id: str) -> list[NamedEntity]:
 
     Returns only each department's id and name. No personal data.
     """
+    logger.info("tool list_departments organisation_id=%s", organisation_id)
     client = _get_client()
     path = f"/api/v1/organisations/{organisation_id}/departments"
     return [to_named(r) for r in client.paginate(path)]
@@ -67,6 +76,7 @@ def list_work_locations(organisation_id: str) -> list[NamedEntity]:
 
     Returns only each location's id and name. No personal data.
     """
+    logger.info("tool list_work_locations organisation_id=%s", organisation_id)
     client = _get_client()
     path = f"/api/v1/organisations/{organisation_id}/work_locations"
     return [to_named(r) for r in client.paginate(path)]
@@ -80,13 +90,25 @@ def employee_count(organisation_id: str) -> int:
     employee record or field is returned. Requires the urn:mainapp:employees:read
     scope.
     """
+    logger.info("tool employee_count organisation_id=%s", organisation_id)
     client = _get_client()
     path = f"/api/v1/organisations/{organisation_id}/employees"
     return client.total_items(path)
 
 
+def _configure_logging() -> None:
+    """Log to stderr only. stdout is the MCP transport and must stay clean."""
+    level = os.environ.get("EH_LOG_LEVEL", "INFO").upper()
+    logging.basicConfig(
+        stream=sys.stderr,
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+    )
+
+
 def main() -> None:
     """Run the server over stdio (the transport Claude Desktop launches)."""
+    _configure_logging()
     mcp.run()
 
 
