@@ -94,7 +94,7 @@ class KpiConfig:
             if k not in _KNOWN_TOP_LEVEL
         ]
 
-        grouping = raw.get("service_grouping", "team")
+        grouping = raw.get("service_grouping", "work_location")
         if grouping not in ALLOWED_GROUPINGS:
             raise KpiConfigError(
                 f"service_grouping must be one of {ALLOWED_GROUPINGS}, got {grouping!r}."

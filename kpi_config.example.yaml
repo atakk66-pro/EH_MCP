@@ -8,12 +8,11 @@
 # Validate it any time with:  python -m eh_mcp.kpi_config kpi_config.yaml
 
 # Which Employment Hero dimension represents a "service" (a care home, branch,
-# or domiciliary round). Every "by service" KPI groups on this. If you are not
-# sure which one your tenant uses, leave the default and confirm it against the
-# live data once you have an API token.
+# or domiciliary round). Every "by service" KPI groups on this.
 # One of: team | work_location | cost_centre
 # (department and position are NOT readable via the API, so they cannot be used.)
-service_grouping: team
+# Confirmed for EH Noblecare: care homes are configured as work locations.
+service_grouping: work_location
 
 # Leave category NAMES exactly as they appear in Employment Hero that count as
 # sickness absence. EH returns a category name, not a sick/annual flag, so this
