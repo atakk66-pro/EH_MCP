@@ -27,7 +27,7 @@
         "PYTHONPATH": "${__dirname}/src",
         "EH_CLIENT_ID": "${user_config.client_id}",
         "EH_CLIENT_SECRET": "${user_config.client_secret}",
-        "EH_REDIRECT_URI": "http://localhost:${user_config.redirect_port}/callback",
+        "EH_REDIRECT_URI": "https://127.0.0.1:${user_config.redirect_port}/callback",
         "EH_SCOPES": "${user_config.scopes}",
         "EH_TOKEN_FILE": "${HOME}/.eh_mcp/token.json"
       }

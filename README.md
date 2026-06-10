@@ -70,16 +70,18 @@ themselves.
 
 ### Redirect URI
 
-Enter exactly:
+Employment Hero requires an **https** redirect URI. Enter exactly:
 
 ```
-http://localhost:8765/callback
+https://127.0.0.1:8765/callback
 ```
 
-If the portal rejects `http`/`localhost`, use `http://127.0.0.1:8765/callback`
-instead. Whatever you enter here must match the extension's sign-in callback
-port (default 8765) and `EH_REDIRECT_URI` in the manual install. It is the local
-address the one-time browser sign-in listens on.
+This is a local address, not a website, so there is nothing to host. The
+extension's sign-in listener serves it over TLS using a self-signed certificate
+generated on the machine, so the browser shows a one-time "your connection is
+not private" warning that the user clicks through (see [docs/INSTALL.md](docs/INSTALL.md)).
+Whatever you register here must match the extension's callback port (default
+8765) and `EH_REDIRECT_URI` in the manual install.
 
 ### Administrator role required
 

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import http.server
 import logging
+import os
+import ssl
 import threading
 import time
 import urllib.parse
@@ -24,6 +26,70 @@ from .config import Settings
 logger = logging.getLogger("eh_mcp.oauth")
 
 _DEFAULT_TIMEOUT_SECONDS = 300
+_CERT_NAME = "loopback-cert.pem"
+_KEY_NAME = "loopback-key.pem"
+
+
+def ensure_self_signed_cert(cert_dir: str) -> tuple[str, str]:
+    """Return paths to a self-signed cert/key for the loopback HTTPS listener.
+
+    Employment Hero requires an https redirect URI, so the local sign-in server
+    must serve TLS. A self-signed cert for 127.0.0.1/localhost is generated once
+    and cached. The browser shows a one-time "not private" warning the user
+    clicks through; nothing leaves the machine, so this is safe for loopback.
+    """
+    cert_path = os.path.join(cert_dir, _CERT_NAME)
+    key_path = os.path.join(cert_dir, _KEY_NAME)
+    if os.path.exists(cert_path) and os.path.exists(key_path):
+        return cert_path, key_path
+
+    os.makedirs(cert_dir, exist_ok=True)
+
+    import ipaddress
+    from datetime import datetime, timedelta, timezone
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")])
+    now = datetime.now(timezone.utc)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=3650))
+        .add_extension(
+            x509.SubjectAlternativeName(
+                [
+                    x509.IPAddress(ipaddress.ip_address("127.0.0.1")),
+                    x509.DNSName("localhost"),
+                ]
+            ),
+            critical=False,
+        )
+        .sign(key, hashes.SHA256())
+    )
+    with open(key_path, "wb") as f:
+        f.write(
+            key.private_bytes(
+                serialization.Encoding.PEM,
+                serialization.PrivateFormat.TraditionalOpenSSL,
+                serialization.NoEncryption(),
+            )
+        )
+    try:
+        os.chmod(key_path, 0o600)
+    except OSError:
+        pass
+    with open(cert_path, "wb") as f:
+        f.write(cert.public_bytes(serialization.Encoding.PEM))
+    return cert_path, key_path
 
 
 class OAuthFlowError(RuntimeError):
@@ -104,6 +170,19 @@ def run_authorization_flow(
             f"Could not start the sign-in listener on {host}:{port} ({exc}). "
             f"Close whatever is using port {port} and try connecting again."
         ) from exc
+
+    if redirect.scheme == "https":
+        cert_dir = os.path.dirname(settings.token_file) or "."
+        try:
+            cert_path, key_path = ensure_self_signed_cert(cert_dir)
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context.load_cert_chain(cert_path, key_path)
+            server.socket = context.wrap_socket(server.socket, server_side=True)
+        except Exception as exc:
+            server.server_close()
+            raise OAuthFlowError(
+                f"Could not set up the secure sign-in listener: {exc}"
+            ) from exc
 
     authorize_url = build_authorize_url(settings)
     logger.info("Authorization URL: %s", authorize_url)

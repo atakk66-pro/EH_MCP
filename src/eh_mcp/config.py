@@ -13,7 +13,9 @@ load_dotenv(override=False)
 
 DEFAULT_API_BASE = "https://api.employmenthero.com"
 DEFAULT_OAUTH_BASE = "https://oauth.employmenthero.com"
-DEFAULT_REDIRECT_URI = "http://localhost:8765/callback"
+# Employment Hero requires an https redirect URI. The local sign-in listener
+# serves TLS with a self-signed cert (see oauth_flow.ensure_self_signed_cert).
+DEFAULT_REDIRECT_URI = "https://127.0.0.1:8765/callback"
 # Least-privilege, read-only scopes. employees:read is only needed for the
 # employee_count aggregate tool. Never request a :write scope here.
 DEFAULT_SCOPES = "urn:mainapp:organisations:read urn:mainapp:employees:read"

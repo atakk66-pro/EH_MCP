@@ -14,6 +14,7 @@ from eh_mcp.config import Settings
 from eh_mcp.oauth_flow import (
     OAuthFlowError,
     build_authorize_url,
+    ensure_self_signed_cert,
     exchange_code_for_refresh_token,
 )
 
@@ -88,3 +89,22 @@ def test_has_stored_token_false_for_empty_token(tmp_path):
     path = tmp_path / "token.json"
     path.write_text(json.dumps({"refresh_token": ""}))
     assert has_stored_token(str(path)) is False
+
+
+def test_self_signed_cert_generated_and_reused(tmp_path):
+    cert1, key1 = ensure_self_signed_cert(str(tmp_path))
+    assert cert1.endswith(".pem") and key1.endswith(".pem")
+    contents = (tmp_path / "loopback-cert.pem").read_text()
+    assert "BEGIN CERTIFICATE" in contents
+    # A second call reuses the same files rather than regenerating.
+    before = (tmp_path / "loopback-key.pem").read_bytes()
+    cert2, key2 = ensure_self_signed_cert(str(tmp_path))
+    assert (cert2, key2) == (cert1, key1)
+    assert (tmp_path / "loopback-key.pem").read_bytes() == before
+
+
+def test_https_settings_parse_host_and_port():
+    s = make_settings("/tmp/x.json")
+    s = s.__class__(**{**s.__dict__, "redirect_uri": "https://127.0.0.1:8765/callback"})
+    url = build_authorize_url(s)
+    assert "redirect_uri=https%3A%2F%2F127.0.0.1%3A8765%2Fcallback" in url

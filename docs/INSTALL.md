@@ -22,8 +22,8 @@ Before anyone installs, make sure the Employment Hero app exists:
 - An EH plan with API access (**Platinum or above**).
 - A registered app in the [Developer Portal](https://developer.employmenthero.com/)
   with the read-only scopes ticked and the redirect URI
-  `http://localhost:8765/callback` (or `http://127.0.0.1:8765/callback` if the
-  portal requires it). You get one **Client ID** and **Client Secret** to share.
+  `https://127.0.0.1:8765/callback` (Employment Hero requires https). You get one
+  **Client ID** and **Client Secret** to share.
 
 ## For each director (install + connect)
 
@@ -34,9 +34,14 @@ Before anyone installs, make sure the Employment Hero app exists:
    given. Leave the other fields at their defaults. These are stored in your
    computer's keychain, not in a file.
 4. In a chat, type: **connect Employment Hero**.
-5. Your browser opens to the Employment Hero sign-in. Approve access. When the
-   tab says sign-in is complete, you are done. You will not need to do this
-   again on this computer.
+5. Your browser opens to the Employment Hero sign-in. Approve access.
+   - After you approve, the browser may show a **"your connection is not
+     private"** warning on a `127.0.0.1` address. This is expected and safe: the
+     page is on your own computer. Click **Advanced**, then **Proceed to
+     127.0.0.1**. (It appears because the local sign-in step uses a certificate
+     made on your machine rather than a public website's.)
+   - When the tab says sign-in is complete, you are done. You will not need to
+     do this again on this computer.
 6. Ask for what you need, for example: "List our organisations" or "How many
    employees are there?".
 
