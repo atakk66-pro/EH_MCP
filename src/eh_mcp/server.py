@@ -101,18 +101,6 @@ def list_teams(organisation_id: str) -> list[NamedEntity]:
 
 
 @mcp.tool()
-def list_departments(organisation_id: str) -> list[NamedEntity]:
-    """List departments in an organisation.
-
-    Returns only each department's id and name. No personal data.
-    """
-    logger.info("tool list_departments organisation_id=%s", organisation_id)
-    client = _get_client()
-    path = f"/api/v1/organisations/{organisation_id}/departments"
-    return [to_named(r) for r in client.paginate(path)]
-
-
-@mcp.tool()
 def list_work_locations(organisation_id: str) -> list[NamedEntity]:
     """List work locations in an organisation.
 

@@ -16,9 +16,38 @@ DEFAULT_OAUTH_BASE = "https://oauth.employmenthero.com"
 # Employment Hero requires an https redirect URI. The local sign-in listener
 # serves TLS with a self-signed cert (see oauth_flow.ensure_self_signed_cert).
 DEFAULT_REDIRECT_URI = "https://127.0.0.1:8765/callback"
-# Least-privilege, read-only scopes. employees:read is only needed for the
-# employee_count aggregate tool. Never request a :write scope here.
-DEFAULT_SCOPES = "urn:mainapp:organisations:read urn:mainapp:employees:read"
+# The exact scopes configured on the registered EH app ("NobleCare KPI Reader",
+# from its View Application page). EH's real scope format is resource:action,
+# not the urn:mainapp:...:read form shown in some docs. All are read-only, and
+# the app's scope set is immutable, so this list must match it exactly.
+# work_eligibility and onboard_polling_status are granted to the token but no
+# tool ever reads them (blocked by the allowlist; see docs/ALLOWLIST.md).
+DEFAULT_SCOPES = " ".join(
+    (
+        "cost_centres:list",
+        "employees:list",
+        "employees:show",
+        "employees:onboard_polling_status",
+        "employees_certifications:list",
+        "employees:leave_balances:list",
+        "employees:rostered_shifts:job_status",
+        "employees:rostered_shifts:shift_cost:show",
+        "employees:timesheet_entries:list",
+        "employees:work_eligibility:show",
+        "employing_entities:list",
+        "leave_categories:list",
+        "leave_requests:list",
+        "leave_requests:show",
+        "pay_categories:list",
+        "rostered_shifts:list",
+        "rostered_shifts:show",
+        "teams:list",
+        "teams:employees:list",
+        "work_locations:list",
+        "work_sites:list",
+        "work_types:list",
+    )
+)
 DEFAULT_TOKEN_FILE = os.path.expanduser("~/.eh_mcp/token.json")
 
 

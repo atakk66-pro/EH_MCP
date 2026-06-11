@@ -113,9 +113,11 @@ uncertainties:
   (care hours, overtime, delivery, lateness) is reachable with the same token.
   Overtime classification still needs the pay-category mapping (B5).
 - **Departments and Positions are not readable** (Update/Create scopes only, no
-  Read). So the `list_departments` tool will 403, and "department" cannot be the
-  service grouping. Use Teams, Work locations, or Cost centres. Leave categories
-  *are* readable, which helps confirm the sickness/annual mapping (B7).
+  Read). The `list_departments` tool has been removed, and "department" cannot
+  be the service grouping. Use Teams, Work locations, or Cost centres. Leave
+  categories *are* readable, which helps confirm the sickness/annual mapping
+  (B7). The registered app's actual 22 scopes (resource:action format) are
+  catalogued in [ALLOWLIST.md](ALLOWLIST.md).
 
 ## Key uncertainties to verify first
 

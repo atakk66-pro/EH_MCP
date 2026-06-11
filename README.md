@@ -44,11 +44,13 @@ an allowlist model.
 
 | Tool | Returns | Scope needed |
 |------|---------|--------------|
-| `list_organisations()` | `[{id, name}]` | organisations:read |
-| `list_teams(organisation_id)` | `[{id, name}]` | organisations:read |
-| `list_departments(organisation_id)` | `[{id, name}]` | organisations:read |
-| `list_work_locations(organisation_id)` | `[{id, name}]` | organisations:read |
-| `employee_count(organisation_id)` | `int` | employees:read |
+| `list_organisations()` | `[{id, name}]` | none configured — may be implicit; verify live |
+| `list_teams(organisation_id)` | `[{id, name}]` | teams:list |
+| `list_work_locations(organisation_id)` | `[{id, name}]` | work_locations:list |
+| `employee_count(organisation_id)` | `int` | employees:list |
+
+(`list_departments` was removed: Employment Hero exposes no read scope for
+departments, so it can never work. Use teams, work locations, or cost centres.)
 
 ## Prerequisites
 
@@ -128,9 +130,15 @@ Notes:
 - **Departments and Positions have no Read scope** (only Update/Create), so they
   cannot be used as the "by service" grouping. Use Teams, Work locations, or
   Cost centres.
-- The portal shows friendly names; the exact `urn:...` scope strings appear on
-  the app's Review / detail page. Copy them into `EH_SCOPES` (manual install) or
-  the extension's "scopes" field so the sign-in request matches.
+- The portal shows friendly names; the exact scope strings appear on the app's
+  View Application page in `resource:action` form (e.g. `employees:list`,
+  `teams:list`). Copy them into `EH_SCOPES` (manual install) or the extension's
+  "scopes" field so the sign-in request matches. The registered app's 22 scopes
+  are the defaults in `.env.example` and `manifest.json`; the full
+  scope-to-field mapping is in [docs/ALLOWLIST.md](docs/ALLOWLIST.md).
+- The registered app has **no organisations scope** (it was not in the portal's
+  configured list). `list_organisations` may therefore be refused; if it is,
+  the organisation ID must be supplied directly. Verify on first live call.
 
 ## Install (recommended: Desktop Extension)
 

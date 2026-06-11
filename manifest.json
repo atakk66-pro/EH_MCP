@@ -38,7 +38,6 @@
     {"name": "connection_status", "description": "Report whether Employment Hero is connected."},
     {"name": "list_organisations", "description": "List organisations (id and name only)."},
     {"name": "list_teams", "description": "List teams in an organisation."},
-    {"name": "list_departments", "description": "List departments in an organisation."},
     {"name": "list_work_locations", "description": "List work locations in an organisation."},
     {"name": "employee_count", "description": "Total employee count for an organisation."}
   ],
@@ -60,9 +59,9 @@
     "scopes": {
       "type": "string",
       "title": "Read-only scopes (space-separated)",
-      "description": "Must match the read scopes ticked on your EH app. Leave as default unless your app differs.",
+      "description": "Must match the scopes configured on your EH app exactly. Leave as default unless the app changes.",
       "required": false,
-      "default": "urn:mainapp:organisations:read urn:mainapp:employees:read"
+      "default": "cost_centres:list employees:list employees:show employees:onboard_polling_status employees_certifications:list employees:leave_balances:list employees:rostered_shifts:job_status employees:rostered_shifts:shift_cost:show employees:timesheet_entries:list employees:work_eligibility:show employing_entities:list leave_categories:list leave_requests:list leave_requests:show pay_categories:list rostered_shifts:list rostered_shifts:show teams:list teams:employees:list work_locations:list work_sites:list work_types:list"
     },
     "redirect_port": {
       "type": "number",
