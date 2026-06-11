@@ -135,7 +135,26 @@ def test_missing_file_raises(tmp_path):
 
 
 def test_example_file_is_valid():
-    # The committed example must always load cleanly.
-    cfg = load_kpi_config("kpi_config.example.yaml")
-    assert cfg.service_grouping in ("team", "department", "work_location", "cost_centre")
+    # The committed example must always load cleanly, regardless of the cwd
+    # pytest was invoked from.
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[1] / "kpi_config.example.yaml"
+    cfg = load_kpi_config(str(example))
+    assert cfg.service_grouping in ("team", "work_location", "cost_centre")
     assert isinstance(cfg, KpiConfig)
+
+
+def test_non_integer_headcount_rejected(tmp_path):
+    path = write(
+        tmp_path,
+        """
+        service_grouping: work_location
+        services:
+          - id: "wl_1"
+            name: "Oak House"
+            establishment_headcount: 39.5
+        """,
+    )
+    with pytest.raises(KpiConfigError):
+        load_kpi_config(path)

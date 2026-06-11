@@ -29,6 +29,7 @@
         "EH_CLIENT_SECRET": "${user_config.client_secret}",
         "EH_REDIRECT_URI": "https://127.0.0.1:${user_config.redirect_port}/callback",
         "EH_SCOPES": "${user_config.scopes}",
+        "EH_ORG_ID": "${user_config.organisation_id}",
         "EH_TOKEN_FILE": "${HOME}/.eh_mcp/token.json"
       }
     }
@@ -55,6 +56,13 @@
       "description": "From your Employment Hero Developer Portal app. Stored in your OS keychain.",
       "sensitive": true,
       "required": true
+    },
+    "organisation_id": {
+      "type": "string",
+      "title": "Organisation ID (optional)",
+      "description": "Your Employment Hero organisation ID. Set this so tools work without listing organisations (the app has no organisations scope).",
+      "required": false,
+      "default": ""
     },
     "scopes": {
       "type": "string",

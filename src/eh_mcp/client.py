@@ -23,7 +23,7 @@ import httpx
 
 from .auth import TokenManager
 from .config import Settings
-from .errors import translate_http_error
+from .errors import EHError, translate_http_error
 
 logger = logging.getLogger("eh_mcp.client")
 
@@ -45,7 +45,9 @@ def _retry_after_seconds(resp: httpx.Response, attempt: int) -> float:
     header = resp.headers.get("Retry-After")
     if header:
         try:
-            return min(float(header), _MAX_BACKOFF_SECONDS)
+            # Clamp to [0, max]: a negative value (buggy proxy) would crash
+            # time.sleep. HTTP-date form falls through to backoff.
+            return max(0.0, min(float(header), _MAX_BACKOFF_SECONDS))
         except ValueError:
             pass
     return _backoff_seconds(attempt)
@@ -77,16 +79,42 @@ class EHClient:
             "Accept": "application/json",
         }
 
-    def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    def _get(self, path: str, params: dict[str, Any] | None = None) -> Any:
         attempt = 0
         reauthed = False
         while True:
-            resp = self._http.get(path, params=params, headers=self._headers())
+            try:
+                resp = self._http.get(path, params=params, headers=self._headers())
+            except httpx.TransportError as exc:
+                # Network blips are transient: retry with backoff, then fail
+                # with a clean message (raw exception text never reaches the
+                # model — it can embed URLs and internals).
+                if attempt < _MAX_RETRIES:
+                    delay = _backoff_seconds(attempt)
+                    logger.warning(
+                        "GET %s network error (%s), backing off %.1fs",
+                        path,
+                        type(exc).__name__,
+                        delay,
+                    )
+                    _sleep(delay)
+                    attempt += 1
+                    continue
+                raise EHError(
+                    "Could not reach Employment Hero (network problem). Check "
+                    "the internet connection and try again."
+                ) from exc
             status = resp.status_code
 
             if status == 200:
                 logger.info("GET %s -> 200 (%d bytes)", path, len(resp.content))
-                return resp.json()
+                try:
+                    return resp.json()
+                except ValueError as exc:
+                    raise EHError(
+                        "Employment Hero returned an unexpected (non-JSON) "
+                        "response. Try again shortly."
+                    ) from exc
 
             if status == 401 and not reauthed:
                 # Access token may have expired between requests; refresh once.
@@ -120,20 +148,26 @@ class EHClient:
     # -- envelope helpers ------------------------------------------------
 
     @staticmethod
-    def _data(payload: dict[str, Any]) -> Any:
-        return payload.get("data", payload)
+    def _data(payload: Any) -> Any:
+        if isinstance(payload, dict):
+            return payload.get("data", payload)
+        return payload
 
     @classmethod
-    def _items(cls, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def _items(cls, payload: Any) -> list[dict[str, Any]]:
         data = cls._data(payload)
+        if isinstance(data, list):
+            return data
         if isinstance(data, dict):
             items = data.get("items")
             if isinstance(items, list):
                 return items
-            return []
-        if isinstance(data, list):
-            return data
-        return []
+        # An unrecognised shape must be loud: silently returning [] would make
+        # counts read as 0 and mislead the KPIs built on them.
+        raise EHError(
+            "Employment Hero returned an unexpected response shape for a list "
+            "endpoint. The API format may have changed."
+        )
 
     # -- public read operations -----------------------------------------
 
@@ -154,8 +188,16 @@ class EHClient:
 
             data = self._data(payload)
             total_pages = data.get("total_pages") if isinstance(data, dict) else None
-            if not items or not total_pages or page >= int(total_pages):
-                break
+            if total_pages is not None:
+                # Pagination metadata is authoritative, even across an empty
+                # page mid-stream.
+                if page >= int(total_pages):
+                    break
+            else:
+                # Bare-list envelope with no metadata: a short page means done.
+                # A full page may mean more, so keep going until a short one.
+                if len(items) < _MAX_ITEM_PER_PAGE:
+                    break
             page += 1
 
     def total_items(self, path: str, params: dict[str, Any] | None = None) -> int:

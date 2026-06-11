@@ -14,8 +14,8 @@ class EHError(RuntimeError):
 
 _MESSAGES = {
     401: (
-        "Authentication failed (401). The refresh token may be invalid or "
-        "revoked. Re-run scripts/authorize.py to re-authorize."
+        "Authentication failed (401). The Employment Hero connection may have "
+        "expired or been revoked. Ask me to connect Employment Hero again."
     ),
     403: (
         "Access denied by Employment Hero (403). The OAuth app is most likely "

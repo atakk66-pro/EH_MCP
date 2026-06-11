@@ -11,12 +11,16 @@ is handled by Claude Desktop at install time via the `uv` runtime.
 ```bash
 cd "Project for EH Noblecare"
 npx -y @anthropic-ai/mcpb validate manifest.json   # optional sanity check
-npx -y @anthropic-ai/mcpb pack .                    # builds employment-hero-readonly.mcpb
+npx -y @anthropic-ai/mcpb pack . employment-hero-readonly-0.1.0.mcpb
 ```
 
-Send `employment-hero-readonly.mcpb` to each director (email, shared drive, or
-attach it to a GitHub release). It contains no secrets; the Client ID/Secret are
-entered per-person at install time.
+(Pass the output filename explicitly: without it, `mcpb pack .` names the file
+after the directory.)
+
+Send `employment-hero-readonly-0.1.0.mcpb` (the version number is in the
+filename) to each director (email, shared drive, or attach it to a GitHub
+release). It contains no secrets; the Client ID/Secret are entered per-person at
+install time.
 
 Before anyone installs, make sure the Employment Hero app exists:
 - An EH plan with API access (**Platinum or above**).
@@ -29,10 +33,11 @@ Before anyone installs, make sure the Employment Hero app exists:
 
 1. Open Claude Desktop. Go to **Settings > Extensions**.
 2. Under **Advanced / Extension Developer**, choose **Install Extension...** and
-   pick the `employment-hero-readonly.mcpb` file you were sent.
+   pick the `employment-hero-readonly-0.1.0.mcpb` file you were sent.
 3. In the install dialog, paste the **Client ID** and **Client Secret** you were
-   given. Leave the other fields at their defaults. These are stored in your
-   computer's keychain, not in a file.
+   given, and the **Organisation ID** if you were given one (it lets everything
+   work without an extra lookup). Leave the other fields at their defaults. The
+   credentials are stored in your computer's keychain, not in a file.
 4. In a chat, type: **connect Employment Hero**.
 5. Your browser opens to the Employment Hero sign-in. Approve access.
    - After you approve, the browser may show a **"your connection is not
@@ -42,16 +47,17 @@ Before anyone installs, make sure the Employment Hero app exists:
      made on your machine rather than a public website's.)
    - When the tab says sign-in is complete, you are done. You will not need to
      do this again on this computer.
-6. Ask for what you need, for example: "List our organisations" or "How many
-   employees are there?".
+6. Ask for what you need, for example: "List our work locations" or "How many
+   employees do we have?".
 
 ## If something goes wrong
 
 - **"Not connected" message**: say "connect Employment Hero" and complete the
   browser step.
-- **The browser did not open**: the connect step prints a link; open it
-  manually. (Maintainers: the URL is also in the extension logs under Settings >
-  Extensions > the server's logs.)
+- **The browser did not open**: wait for the connect step to time out (a few
+  minutes); its message includes the sign-in link to open manually.
+  (Maintainers: the URL is also logged immediately in the extension logs under
+  Settings > Extensions > the server's logs.)
 - **Sign-in listener / port error**: something else is using port 8765. Close it
   and connect again, or set a different "Sign-in callback port" in the
   extension settings and register that port's redirect URI on the EH app.

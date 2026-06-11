@@ -20,7 +20,19 @@ from typing import Any
 
 import yaml
 
-DEFAULT_PATH = os.environ.get("EH_KPI_CONFIG", "kpi_config.yaml")
+def default_path() -> str:
+    """Resolve the config path at call time (not import time).
+
+    Order: EH_KPI_CONFIG env var, then ./kpi_config.yaml (dev checkout), then
+    ~/.eh_mcp/kpi_config.yaml (the packaged-extension location, where the cwd
+    is the extension install dir and holds no config).
+    """
+    env = os.environ.get("EH_KPI_CONFIG")
+    if env:
+        return os.path.expanduser(env)
+    if os.path.exists("kpi_config.yaml"):
+        return "kpi_config.yaml"
+    return os.path.expanduser("~/.eh_mcp/kpi_config.yaml")
 # department and position are NOT readable via the Controls API (no Read scope —
 # only Update/Create), so they cannot be a service grouping. Confirmed from the
 # Developer Portal "Add New Application" scope list.
@@ -126,13 +138,13 @@ class KpiConfig:
 
 
 def load_kpi_config(path: str | None = None) -> KpiConfig:
-    path = path or DEFAULT_PATH
+    path = path or default_path()
     if not os.path.exists(path):
         raise KpiConfigError(
             f"No KPI config at {path}. Copy kpi_config.example.yaml to {path} and "
             "fill it in (or set EH_KPI_CONFIG to its path)."
         )
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         try:
             raw = yaml.safe_load(f) or {}
         except yaml.YAMLError as exc:
@@ -224,6 +236,9 @@ def _opt_number(raw: dict[str, Any], key: str, index: int, cast):
         raise KpiConfigError(
             f"services[{index}].{key} must be a non-negative number if present."
         )
+    if cast is int and isinstance(value, float) and not value.is_integer():
+        # Don't silently truncate 39.5 heads to 39: reject so the author fixes it.
+        raise KpiConfigError(f"services[{index}].{key} must be a whole number.")
     return cast(value)
 
 
@@ -231,7 +246,7 @@ def _opt_number(raw: dict[str, Any], key: str, index: int, cast):
 
 
 def _cli() -> None:
-    path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PATH
+    path = sys.argv[1] if len(sys.argv) > 1 else default_path()
     try:
         cfg = load_kpi_config(path)
     except KpiConfigError as exc:

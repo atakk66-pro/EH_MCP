@@ -28,11 +28,11 @@ def make_client(handler, tokens=None):
     settings = Settings(
         client_id="cid",
         client_secret="secret",
-        redirect_uri="http://localhost:8765/callback",
+        redirect_uri="https://127.0.0.1:8765/callback",
         api_base="https://api.employmenthero.com",
         oauth_base="https://oauth.employmenthero.com",
         token_file="/tmp/unused-token.json",
-        scopes="urn:mainapp:organisations:read",
+        scopes="teams:list employees:list",
     )
     return EHClient(
         settings, tokens or FakeTokens(), transport=httpx.MockTransport(handler)
@@ -132,3 +132,92 @@ def test_500_retries_then_gives_up(monkeypatch):
         list(c.paginate("/api/v1/organisations"))
     # 1 initial attempt + _MAX_RETRIES retries
     assert calls["n"] == client_mod._MAX_RETRIES + 1
+
+
+def test_bare_list_full_page_fetches_next_page():
+    # A bare-list envelope with a FULL page must keep paginating; the old code
+    # stopped after page 1 and silently truncated.
+    full_page = [{"id": i} for i in range(client_mod._MAX_ITEM_PER_PAGE)]
+
+    def handler(request):
+        page = int(httpx.QueryParams(request.url.query).get("page_index"))
+        if page == 1:
+            return httpx.Response(200, json={"data": full_page})
+        return httpx.Response(200, json={"data": [{"id": "last"}]})
+
+    c = make_client(handler)
+    items = list(c.paginate("/api/v1/organisations"))
+    assert len(items) == client_mod._MAX_ITEM_PER_PAGE + 1
+    assert items[-1]["id"] == "last"
+
+
+def test_empty_page_mid_stream_respects_total_pages():
+    def handler(request):
+        page = int(httpx.QueryParams(request.url.query).get("page_index"))
+        if page == 2:
+            return httpx.Response(200, json=envelope([], total_pages=3))
+        return httpx.Response(200, json=envelope([{"id": page}], total_pages=3))
+
+    c = make_client(handler)
+    assert [i["id"] for i in c.paginate("/x")] == [1, 3]
+
+
+def test_unrecognised_envelope_raises_not_zero():
+    def handler(request):
+        return httpx.Response(200, json={"data": {"unexpected": "shape"}})
+
+    c = make_client(handler)
+    with pytest.raises(EHError):
+        list(c.paginate("/api/v1/organisations"))
+    with pytest.raises(EHError):
+        c.total_items("/api/v1/organisations")
+
+
+def test_top_level_array_payload_is_handled():
+    def handler(request):
+        return httpx.Response(200, json=[{"id": "a"}])
+
+    c = make_client(handler)
+    assert [i["id"] for i in c.paginate("/x")] == ["a"]
+
+
+def test_transport_error_retried_then_clean_message(monkeypatch):
+    monkeypatch.setattr(client_mod, "_sleep", lambda s: None)
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        raise httpx.ConnectError("boom")
+
+    c = make_client(handler)
+    with pytest.raises(EHError) as excinfo:
+        list(c.paginate("/x"))
+    assert "network" in str(excinfo.value).lower()
+    assert "boom" not in str(excinfo.value)
+    assert calls["n"] == client_mod._MAX_RETRIES + 1
+
+
+def test_non_json_200_raises_clean_error():
+    def handler(request):
+        return httpx.Response(200, text="<html>gateway</html>")
+
+    c = make_client(handler)
+    with pytest.raises(EHError) as excinfo:
+        list(c.paginate("/x"))
+    assert "html" not in str(excinfo.value).lower() or "non-json" in str(excinfo.value).lower()
+
+
+def test_negative_retry_after_clamped(monkeypatch):
+    slept = []
+    monkeypatch.setattr(client_mod, "_sleep", lambda s: slept.append(s))
+    calls = {"n": 0}
+
+    def handler(request):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429, headers={"Retry-After": "-5"}, json={})
+        return httpx.Response(200, json=envelope([{"id": 1}], total_items=1))
+
+    c = make_client(handler)
+    assert c.total_items("/x") == 1
+    assert slept == [0.0]

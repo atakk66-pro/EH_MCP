@@ -14,8 +14,8 @@ the schema is verified against a live token.
 
 ## What it does, and what it deliberately does not
 
-It exposes organisation-structure data (organisations, teams, departments, work
-locations) and a single aggregate headcount. Every tool returns only an
+It exposes organisation-structure data (organisations, teams, work locations)
+and a single aggregate headcount. Every tool returns only an
 allowlisted, non-personal shape. There are no write tools, and no tool returns
 an employee's name, email, address, salary, date of birth, or tax/bank details.
 
@@ -24,9 +24,10 @@ an employee's name, email, address, salary, date of birth, or tax/bank details.
 The safety property does not depend on the model behaving. It is enforced in
 code, before any result is serialized:
 
-1. **Read-only OAuth scopes.** The integration requests only
-   `urn:mainapp:...:read` scopes. With no write scope, the token cannot mutate
-   anything even if asked.
+1. **Read-only OAuth scopes.** The integration requests only read scopes
+   (`employees:list`, `teams:list`, ...; the full set is in
+   [docs/ALLOWLIST.md](docs/ALLOWLIST.md)). With no write scope, the token
+   cannot mutate anything even if asked.
 2. **Only read tools are registered.** A tool that does not exist cannot be
    called. There is no create/update/delete tool in this server.
 3. **Allowlist projection.** Every tool returns a Pydantic model
@@ -92,39 +93,19 @@ Employment Hero **administrator**, or have access to the relevant modules via
 Permissions. Almost every scope below sits under the portal's "Administrator
 Role Required" group. Only `Organisations -> Read` works for a standard user.
 
-### API scopes to tick (all Read only)
+### Configured scopes
 
-Scopes are immutable once the app is saved, so tick everything below now. Adding
-one later means creating a new app and re-authorizing.
+The app is registered ("NobleCare KPI Reader") with 22 read-only scopes in
+`resource:action` form. The full list, and the per-scope mapping of what the
+server reads internally versus what may ever reach the model, is in
+[docs/ALLOWLIST.md](docs/ALLOWLIST.md). The same 22 strings are the `EH_SCOPES`
+defaults in `.env.example`, `manifest.json`, and `config.py`; they must match
+the app exactly, since EH scope sets are immutable once saved.
 
-**Phase 1 — the first KPIs and the current read tools:**
-
-| Portal scope | Read | Used for |
-|--------------|:----:|----------|
-| Organisations | ✓ | list organisations (this one is in the "User" section) |
-| Employees | ✓ | turnover, retention, tenure, probation, headcount |
-| Employees certifications | ✓ | training compliance per employee |
-| Certifications | ✓ | organisation certification list |
-| Leave requests | ✓ | sickness, Bradford Factor, absence |
-| Leave categories | ✓ | map which categories count as sickness/annual |
-| Leave balances | ✓ | annual leave vs target |
-| Teams | ✓ | "by service" grouping (default) |
-| Work locations | ✓ | alternative "by service" grouping |
-| Cost centres | ✓ | alternative "by service" grouping |
-
-**Phase 2 — hours/overtime (in this same Controls API). Tick now, since scopes
-can't be added later:**
-
-| Portal scope | Read | Used for |
-|--------------|:----:|----------|
-| Timesheet entries | ✓ | total care hours, overtime |
-| Rostered shifts | ✓ | delivery vs rostered, lateness |
-| Pay categories | ✓ | classifying overtime / agency hours |
-
-**Leave UNTICKED (personal data the server never needs):** Bank accounts,
-Documents, Emergency contacts, Pay details, Payslips, Tax declaration,
-Superannuation (detail and fund), Work eligibility, Employee custom fields,
-Employee form responses, Job histories.
+Two granted scopes (`employees:work_eligibility:show` and
+`employees:onboard_polling_status`) are never called by any tool; the high-PII
+portal scopes (Bank accounts, Pay details, Payslips, Tax declaration, Documents,
+Emergency contacts, Superannuation) were left unticked at registration.
 
 Notes:
 - **Departments and Positions have no Read scope** (only Update/Create), so they
@@ -148,10 +129,10 @@ is click-through, with no Python, `pip`, or config files. Full step-by-step:
 
 1. Build the bundle once (you, the maintainer):
    ```bash
-   npx -y @anthropic-ai/mcpb pack .
+   npx -y @anthropic-ai/mcpb pack . employment-hero-readonly-0.1.0.mcpb
    ```
-   This produces `employment-hero-readonly.mcpb` (~20 KB; uses the `uv` server
-   type, so Claude Desktop provisions Python and dependencies itself).
+   (~20 KB; uses the `uv` server type, so Claude Desktop provisions Python and
+   dependencies itself.)
 2. Send that one file to each director.
 3. They open Claude Desktop, go to Settings > Extensions, install the `.mcpb`,
    and paste the **Client ID** and **Client Secret** in the dialog (stored in
@@ -189,13 +170,15 @@ Then add it to `claude_desktop_config.json` (Linux:
       "env": {
         "EH_CLIENT_ID": "your-client-id",
         "EH_CLIENT_SECRET": "your-client-secret",
-        "EH_SCOPES": "urn:mainapp:organisations:read urn:mainapp:employees:read",
-        "EH_TOKEN_FILE": "/home/aran/.eh_mcp/token.json"
+        "EH_ORG_ID": "your-organisation-id"
       }
     }
   }
 }
 ```
+
+`EH_SCOPES` and `EH_TOKEN_FILE` can be omitted: the defaults are the registered
+app's 22 scopes and `~/.eh_mcp/token.json`.
 
 Note: Claude Desktop is officially supported on macOS and Windows. On Linux the
 config path above is the community convention.
@@ -240,7 +223,7 @@ account (API access needs a paid plan). Check them before relying on them:
   under `data`. Confirm the real shape and adjust `_items` / `_data` if needed.
 - Rate limits (reported 20 req/s, 100 req/min) and the `item_per_page` maximum
   of 100.
-- Whether `teams`, `departments`, and `work_locations` are all covered by the
-  `organisations:read` scope, or need their own scopes.
+- Whether `GET /api/v1/organisations` works without an organisations scope
+  (none is configured on the app). If not, set `EH_ORG_ID`.
 - Refresh-token lifetime and exact rotation behaviour.
 - Data residency for your contracting region (AU vs UK).

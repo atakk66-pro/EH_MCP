@@ -12,6 +12,7 @@ Employment Hero write endpoint.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -19,6 +20,8 @@ import time
 import httpx
 
 from .config import Settings
+
+logger = logging.getLogger("eh_mcp.auth")
 
 # Access tokens last ~15 minutes (900s). Refresh this many seconds early so a
 # token never expires mid-request.
@@ -30,10 +33,15 @@ class TokenError(RuntimeError):
 
 
 def store_refresh_token(path: str, refresh_token: str) -> None:
-    """Atomically write the refresh token to ``path`` with 0600 permissions."""
+    """Atomically write the refresh token to ``path`` with 0600 permissions.
+
+    The temp file is created 0600 from the start (not chmodded after), so the
+    token is never world-readable even briefly.
+    """
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     tmp = f"{path}.tmp"
-    with open(tmp, "w") as f:
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
         json.dump({"refresh_token": refresh_token}, f)
     os.replace(tmp, path)
     try:
@@ -87,13 +95,38 @@ class TokenManager:
             timeout=30.0,
         )
         if resp.status_code != 200:
+            # Never put the response body in the error: TokenError text reaches
+            # the model via tool results, and OAuth bodies can carry tokens.
+            logger.debug("Token refresh failed (%d): %s", resp.status_code, resp.text[:300])
+            error_code = ""
+            try:
+                error_code = str(resp.json().get("error", ""))
+            except ValueError:
+                pass
+            if error_code == "invalid_grant":
+                raise TokenError(
+                    "The Employment Hero connection has expired or was revoked. "
+                    "Ask me to connect Employment Hero again."
+                )
             raise TokenError(
-                f"Token refresh failed ({resp.status_code}): {resp.text[:300]}"
+                f"Could not refresh the Employment Hero connection (HTTP "
+                f"{resp.status_code}). Try again, or ask me to connect "
+                "Employment Hero again."
             )
-        payload = resp.json()
+        try:
+            payload = resp.json()
+        except ValueError:
+            raise TokenError(
+                "Employment Hero returned an unexpected response while "
+                "refreshing the connection. Try again shortly."
+            ) from None
         access = payload.get("access_token")
         if not access:
-            raise TokenError(f"No access_token in refresh response: {payload}")
+            # Do not interpolate the payload: it may contain token material.
+            raise TokenError(
+                "Employment Hero did not return an access token. Try again, or "
+                "ask me to connect Employment Hero again."
+            )
 
         # Employment Hero rotates refresh tokens: each refresh returns a new one
         # and the old one is invalidated. Persist the new one immediately.
@@ -113,11 +146,20 @@ class TokenManager:
                 "Employment Hero is not connected yet. Ask me to connect Employment "
                 "Hero (the connect_employment_hero tool) to sign in, then try again."
             )
-        with open(path) as f:
-            data = json.load(f)
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (OSError, ValueError) as exc:
+            raise TokenError(
+                "The stored Employment Hero connection is unreadable. Ask me to "
+                "connect Employment Hero again."
+            ) from exc
         refresh_token = data.get("refresh_token")
         if not refresh_token:
-            raise TokenError(f"Token file {path} has no refresh_token.")
+            raise TokenError(
+                "The stored Employment Hero connection is incomplete. Ask me to "
+                "connect Employment Hero again."
+            )
         return refresh_token
 
     def _store_refresh_token(self, refresh_token: str) -> None:

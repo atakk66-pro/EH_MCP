@@ -12,6 +12,7 @@ from __future__ import annotations
 import http.server
 import logging
 import os
+import secrets
 import ssl
 import threading
 import time
@@ -75,7 +76,8 @@ def ensure_self_signed_cert(cert_dir: str) -> tuple[str, str]:
         )
         .sign(key, hashes.SHA256())
     )
-    with open(key_path, "wb") as f:
+    fd = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
         f.write(
             key.private_bytes(
                 serialization.Encoding.PEM,
@@ -83,10 +85,6 @@ def ensure_self_signed_cert(cert_dir: str) -> tuple[str, str]:
                 serialization.NoEncryption(),
             )
         )
-    try:
-        os.chmod(key_path, 0o600)
-    except OSError:
-        pass
     with open(cert_path, "wb") as f:
         f.write(cert.public_bytes(serialization.Encoding.PEM))
     return cert_path, key_path
@@ -96,16 +94,16 @@ class OAuthFlowError(RuntimeError):
     """Raised when the interactive authorization flow cannot complete."""
 
 
-def build_authorize_url(settings: Settings) -> str:
-    query = urllib.parse.urlencode(
-        {
-            "client_id": settings.client_id,
-            "redirect_uri": settings.redirect_uri,
-            "response_type": "code",
-            "scope": settings.scopes,
-        }
-    )
-    return f"{settings.oauth_base}/oauth2/authorize?{query}"
+def build_authorize_url(settings: Settings, state: str | None = None) -> str:
+    params = {
+        "client_id": settings.client_id,
+        "redirect_uri": settings.redirect_uri,
+        "response_type": "code",
+        "scope": settings.scopes,
+    }
+    if state:
+        params["state"] = state
+    return f"{settings.oauth_base}/oauth2/authorize?{urllib.parse.urlencode(params)}"
 
 
 def exchange_code_for_refresh_token(settings: Settings, code: str) -> str:
@@ -142,14 +140,26 @@ def run_authorization_flow(
     redirect = urllib.parse.urlparse(settings.redirect_uri)
     host = redirect.hostname or "127.0.0.1"
     port = redirect.port or 8765
+    # Random per-flow state: the handler ignores any callback that does not
+    # echo it back, so another local process or a malicious web page cannot
+    # inject an attacker-chosen authorization code (login CSRF).
+    expected_state = secrets.token_urlsafe(32)
     result: dict[str, str] = {}
 
     class _Handler(http.server.BaseHTTPRequestHandler):
+        # Drop idle/stalled connections (e.g. a browser preconnect probe)
+        # instead of letting one block the flow.
+        timeout = 10
+
         def do_GET(self) -> None:  # noqa: N802 (http.server API)
             params = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-            if "code" in params:
+            state = params.get("state", [""])[0]
+            if "code" in params and state == expected_state:
                 result["code"] = params["code"][0]
                 body, status = b"Employment Hero sign-in complete. You can close this tab.", 200
+            elif "code" in params:
+                # Wrong/missing state: do NOT capture the code.
+                body, status = b"Sign-in rejected: state mismatch. Try connecting again.", 400
             elif "error" in params:
                 result["error"] = params["error"][0]
                 body, status = (f"Sign-in failed: {params['error'][0]}".encode(), 400)
@@ -164,7 +174,10 @@ def run_authorization_flow(
             return
 
     try:
-        server = http.server.HTTPServer((host, port), _Handler)
+        # Threading server: a stalled connection must not block the real
+        # callback or deadlock shutdown().
+        server = http.server.ThreadingHTTPServer((host, port), _Handler)
+        server.daemon_threads = True
     except OSError as exc:
         raise OAuthFlowError(
             f"Could not start the sign-in listener on {host}:{port} ({exc}). "
@@ -184,7 +197,7 @@ def run_authorization_flow(
                 f"Could not set up the secure sign-in listener: {exc}"
             ) from exc
 
-    authorize_url = build_authorize_url(settings)
+    authorize_url = build_authorize_url(settings, state=expected_state)
     logger.info("Authorization URL: %s", authorize_url)
 
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -199,6 +212,7 @@ def run_authorization_flow(
             time.sleep(0.5)
     finally:
         server.shutdown()
+        server.server_close()
 
     if "error" in result:
         raise OAuthFlowError(

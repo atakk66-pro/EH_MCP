@@ -52,7 +52,7 @@ thresholds:
 # until those KPIs are built; vacancy rate cannot be computed without
 # establishment_headcount.
 services:
-  - id: "REPLACE_WITH_EH_TEAM_ID"
+  - id: "REPLACE_WITH_EH_WORK_LOCATION_ID"
     name: "Example Care Home"
     establishment_headcount: 40
     establishment_fte: 35.0

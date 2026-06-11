@@ -60,6 +60,10 @@ class Settings:
     oauth_base: str
     token_file: str
     scopes: str
+    # The registered app has no organisations scope, so org discovery may be
+    # refused. EH_ORG_ID supplies the organisation directly; tools fall back
+    # to it when no organisation_id argument is given.
+    org_id: str | None = None
 
 
 def load_settings() -> Settings:
@@ -78,6 +82,9 @@ def load_settings() -> Settings:
         redirect_uri=os.environ.get("EH_REDIRECT_URI", DEFAULT_REDIRECT_URI),
         api_base=os.environ.get("EH_API_BASE", DEFAULT_API_BASE).rstrip("/"),
         oauth_base=os.environ.get("EH_OAUTH_BASE", DEFAULT_OAUTH_BASE).rstrip("/"),
-        token_file=os.environ.get("EH_TOKEN_FILE", DEFAULT_TOKEN_FILE),
+        token_file=os.path.expanduser(
+            os.environ.get("EH_TOKEN_FILE", DEFAULT_TOKEN_FILE)
+        ),
         scopes=os.environ.get("EH_SCOPES", DEFAULT_SCOPES),
+        org_id=os.environ.get("EH_ORG_ID") or None,
     )

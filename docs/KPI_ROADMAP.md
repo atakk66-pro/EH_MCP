@@ -16,8 +16,10 @@ token. See the caveats at the end.
 ## Build phases
 
 ### Phase 1 — core HR API, read scopes, buildable now
-All from `GET /api/v1/organisations/{id}/employees`, `/leave_requests`, and
-`/certifications`.
+All from `GET /api/v1/organisations/{id}/employees`, `/leave_requests`, and the
+per-employee certifications endpoint (the app has `employees_certifications:list`;
+no org-level certifications scope is configured, so training compliance is
+computed by iterating employees' certifications).
 
 | KPI | Computable | Source / method |
 |-----|-----------|-----------------|
@@ -37,12 +39,15 @@ All from `GET /api/v1/organisations/{id}/employees`, `/leave_requests`, and
 Overtime %, total care hours by service, delivery vs rostered, lateness, agency
 split, payroll amendments %. These need timesheet/roster/pay-category data.
 
-The Payroll product is rebranded **KeyPay**, a separate API
-(`/api/v2/business/{businessId}/...`) with its own base URL, its own auth (a
-per-business API key or its own OAuth client), and a separately licensed module.
-The HR token cannot reach it. Overtime/agency/amendment have no native flags;
-they are defined by your pay-category and work-type configuration, which an admin
-must map once.
+The registered app's scopes settle what earlier research left ambiguous: the
+hours data IS in this Controls API. `employees:timesheet_entries:list`,
+`rostered_shifts:list`, `employees:rostered_shifts:job_status`,
+`pay_categories:list`, and `work_types:list` are all granted, so total care
+hours, overtime %, delivery vs rostered, and lateness are reachable with the
+same token. Only pay-run-level KPIs (payroll amendments %) would need the
+separate KeyPay Payroll product. Overtime/agency have no native flags; they are
+defined by your pay-category and work-type configuration, which an admin must
+map once in `kpi_config.yaml`.
 
 ### Phase 3 — recruitment / ATS (mostly not API-available)
 Time-to-hire and offer acceptance have **no read API**. The public ATS API is a
@@ -62,9 +67,9 @@ not computable at all without an establishment headcount per service.
 
 ## Blockers (decisions and inputs needed)
 
-- **B1 — "service" dimension.** Map a care home / branch / round to team,
-  department, work_location, or cost_centre. Configurable via
-  `service_grouping`; the default is `team`. Confirm against live data.
+- **B1 — "service" dimension. RESOLVED:** care homes are configured as work
+  locations in this tenant, so the default `service_grouping` is
+  `work_location` (still configurable to team or cost_centre).
 - **B2 / B3 — targets/establishment.** Supplied through `kpi_config.yaml`,
   keyed by EH IDs only. Vacancy rate needs establishment_headcount; budgeted
   variance needs budgeted_hours; annual leave vs target needs entitlement.
@@ -121,8 +126,9 @@ uncertainties:
 
 ## Key uncertainties to verify first
 
-- **Exact scope URN strings.** The portal shows friendly names; confirm the
-  `urn:...` identifiers on the app Review/detail page for `EH_SCOPES`.
+- **Scope strings: RESOLVED.** The app's View Application page shows them in
+  `resource:action` form; the 22 configured scopes are now the `EH_SCOPES`
+  defaults and are catalogued in [ALLOWLIST.md](ALLOWLIST.md).
 - **Field names.** `start_date`, `termination_date`, `probation_length`,
   `trial_or_probation_type`, `leave_category_name`, `total_hours`, cert
   `expiry_date`/`status`, and the `{"data": {"items": [...]}}` envelope are all

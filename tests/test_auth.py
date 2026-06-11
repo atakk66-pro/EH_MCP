@@ -25,11 +25,11 @@ def make_settings(token_file):
     return Settings(
         client_id="cid",
         client_secret="secret",
-        redirect_uri="http://localhost:8765/callback",
+        redirect_uri="https://127.0.0.1:8765/callback",
         api_base="https://api.employmenthero.com",
         oauth_base="https://oauth.employmenthero.com",
         token_file=str(token_file),
-        scopes="urn:mainapp:organisations:read",
+        scopes="teams:list employees:list",
     )
 
 
@@ -109,3 +109,48 @@ def test_failed_refresh_raises(monkeypatch, tmp_path):
     mgr = TokenManager(make_settings(token_file))
     with pytest.raises(TokenError):
         mgr.access_token()
+
+
+def test_invalid_grant_message_is_friendly_and_leak_free(monkeypatch, tmp_path):
+    token_file = tmp_path / "token.json"
+    write_token(token_file, "rt-1")
+    body = {"error": "invalid_grant", "error_description": "secret-internals-xyz"}
+    monkeypatch.setattr(auth_mod.httpx, "post", lambda *a, **k: FakeResponse(400, body))
+    mgr = TokenManager(make_settings(token_file))
+    with pytest.raises(TokenError) as excinfo:
+        mgr.access_token()
+    msg = str(excinfo.value)
+    assert "connect employment hero" in msg.lower()
+    assert "secret-internals-xyz" not in msg
+    assert "invalid_grant" not in msg
+
+
+def test_generic_refresh_failure_never_echoes_body(monkeypatch, tmp_path):
+    token_file = tmp_path / "token.json"
+    write_token(token_file, "rt-1")
+    body = {"weird": "payload", "refresh_token": "LEAKED-TOKEN"}
+    monkeypatch.setattr(auth_mod.httpx, "post", lambda *a, **k: FakeResponse(500, body))
+    mgr = TokenManager(make_settings(token_file))
+    with pytest.raises(TokenError) as excinfo:
+        mgr.access_token()
+    assert "LEAKED-TOKEN" not in str(excinfo.value)
+
+
+def test_missing_access_token_never_echoes_payload(monkeypatch, tmp_path):
+    token_file = tmp_path / "token.json"
+    write_token(token_file, "rt-1")
+    body = {"refresh_token": "LEAKED-TOKEN"}
+    monkeypatch.setattr(auth_mod.httpx, "post", lambda *a, **k: FakeResponse(200, body))
+    mgr = TokenManager(make_settings(token_file))
+    with pytest.raises(TokenError) as excinfo:
+        mgr.access_token()
+    assert "LEAKED-TOKEN" not in str(excinfo.value)
+
+
+def test_corrupt_token_file_raises_token_error(tmp_path):
+    token_file = tmp_path / "token.json"
+    token_file.write_text("{not valid json")
+    mgr = TokenManager(make_settings(token_file))
+    with pytest.raises(TokenError) as excinfo:
+        mgr.access_token()
+    assert "connect employment hero" in str(excinfo.value).lower()
