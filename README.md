@@ -129,14 +129,14 @@ is click-through, with no Python, `pip`, or config files. Full step-by-step:
 
 1. Build the bundle once (you, the maintainer):
    ```bash
-   npx -y @anthropic-ai/mcpb pack . employment-hero-readonly-0.1.0.mcpb
+   npx -y @anthropic-ai/mcpb pack . employment-hero-readonly-0.2.0.mcpb
    ```
    (~20 KB; uses the `uv` server type, so Claude Desktop provisions Python and
    dependencies itself.)
 2. Send that one file to each director.
 3. They open Claude Desktop, go to Settings > Extensions, install the `.mcpb`,
-   and paste the **Client ID** and **Client Secret** in the dialog (stored in
-   their OS keychain, not a file).
+   and paste the **Client ID**, **Client Secret**, and **Organisation ID** in
+   the dialog (the credentials are stored in their OS keychain, not a file).
 4. In chat they say "connect Employment Hero" once. The `connect_employment_hero`
    tool opens their browser to approve read-only access, then stores their
    personal refresh token locally (`~/.eh_mcp/token.json`, mode 600). Each

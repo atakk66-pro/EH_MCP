@@ -200,6 +200,14 @@ class EHClient:
                     break
             page += 1
 
+    def sample(self, path: str) -> Any:
+        """Fetch a single-item page for schema inspection.
+
+        Returns the raw payload. The caller (verify_api_schema) types away every
+        value before anything is returned to the model.
+        """
+        return self._get(path, params={"page_index": 1, "item_per_page": 1})
+
     def total_items(self, path: str, params: dict[str, Any] | None = None) -> int:
         """Return the total count for a list endpoint from pagination metadata.
 

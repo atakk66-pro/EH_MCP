@@ -28,6 +28,7 @@ from .config import Settings, load_settings
 from .errors import EHError
 from .models import NamedEntity, Organisation, to_named, to_org
 from .oauth_flow import OAuthFlowError, run_authorization_flow
+from .schema import type_skeleton
 
 logger = logging.getLogger("eh_mcp.tools")
 
@@ -216,6 +217,64 @@ async def employee_count(organisation_id: str | None = None) -> int:
         return _get_client().total_items(path)
 
     return await _run(go)
+
+
+# -- developer schema probe (off unless EH_DEBUG_SCHEMA is set) -----------
+
+_SCHEMA_ENDPOINTS = {
+    "organisations": "/api/v1/organisations",
+    "teams": "/api/v1/organisations/{org}/teams",
+    "work_locations": "/api/v1/organisations/{org}/work_locations",
+    "cost_centres": "/api/v1/organisations/{org}/cost_centres",
+    "work_sites": "/api/v1/organisations/{org}/work_sites",
+    "work_types": "/api/v1/organisations/{org}/work_types",
+    "employing_entities": "/api/v1/organisations/{org}/employing_entities",
+    "employees": "/api/v1/organisations/{org}/employees",
+    "leave_requests": "/api/v1/organisations/{org}/leave_requests",
+    "leave_categories": "/api/v1/organisations/{org}/leave_categories",
+    "pay_categories": "/api/v1/organisations/{org}/pay_categories",
+    "rostered_shifts": "/api/v1/organisations/{org}/rostered_shifts",
+}
+
+
+async def verify_api_schema(resource: str) -> dict:
+    """[Developer setup] Report the STRUCTURE of one Employment Hero list
+    endpoint: field names and value types only, never any values, so no
+    personal data is returned. Use this once after connecting to confirm the
+    live API shape. resource must be one of the configured endpoint names.
+    """
+    logger.info("tool verify_api_schema resource=%s", resource)
+    if resource not in _SCHEMA_ENDPOINTS:
+        return {
+            "error": f"Unknown resource '{resource}'.",
+            "choices": sorted(_SCHEMA_ENDPOINTS),
+        }
+
+    def go() -> dict:
+        try:
+            settings = load_settings()
+            template = _SCHEMA_ENDPOINTS[resource]
+            if "{org}" in template:
+                template = template.format(org=_resolve_org(settings, None))
+            payload = _get_client().sample(template)
+            return {"resource": resource, "ok": True, "schema": type_skeleton(payload)}
+        except (EHError, RuntimeError) as exc:
+            return {"resource": resource, "ok": False, "error": str(exc)}
+
+    return await _run(go)
+
+
+def _debug_schema_enabled() -> bool:
+    return str(os.environ.get("EH_DEBUG_SCHEMA", "")).strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+if _debug_schema_enabled():
+    mcp.tool()(verify_api_schema)
 
 
 def _configure_logging() -> None:

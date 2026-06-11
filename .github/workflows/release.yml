@@ -1,0 +1,61 @@
+name: Release
+
+# Push a tag like v0.2.0 to build the .mcpb and publish it as a GitHub Release.
+# The bundle is built by CI (not a dev box), so the distributed file is
+# reproducible and test-gated. Uses the built-in GITHUB_TOKEN; no secrets.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install and test
+        run: |
+          python -m pip install -e ".[dev]"
+          pytest -q
+
+      - name: Check version matches the tag
+        run: |
+          set -euo pipefail
+          MAN=$(python -c "import json; print(json.load(open('manifest.json'))['version'])")
+          PROJ=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "manifest=$MAN pyproject=$PROJ tag=$TAG"
+          test "$MAN" = "$PROJ" || { echo "::error::manifest.json ($MAN) != pyproject.toml ($PROJ)"; exit 1; }
+          test "$MAN" = "$TAG"  || { echo "::error::version ($MAN) != tag ($TAG)"; exit 1; }
+
+      - name: Build the .mcpb
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-${VERSION}.mcpb"
+          sha256sum employment-hero-readonly-*.mcpb | tee SHA256SUMS.txt
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            employment-hero-readonly-*.mcpb
+            SHA256SUMS.txt
+          body: |
+            Read-only Employment Hero MCP server, packaged as a Claude Desktop
+            Extension. Install the `.mcpb` via Settings > Extensions > Advanced
+            > Install Extension, then ask Claude to "connect Employment Hero".
+            See docs/INSTALL.md.
+
+            The `SHA256SUMS.txt` asset lists the bundle checksum.

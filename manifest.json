@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "employment-hero-readonly",
   "display_name": "Employment Hero (read-only)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Read-only Employment Hero access for Claude Desktop: aggregate, PII-minimising HR figures for care directors.",
   "long_description": "Connects Claude to your Employment Hero account, read-only. After installing, ask Claude to \"connect Employment Hero\" once to approve access in your browser, then ask for organisation, team, and work-location lists and headcount. No write access, and no individual employee fields (names, contact details, pay) are ever returned.",
   "author": {
@@ -30,6 +30,7 @@
         "EH_REDIRECT_URI": "https://127.0.0.1:${user_config.redirect_port}/callback",
         "EH_SCOPES": "${user_config.scopes}",
         "EH_ORG_ID": "${user_config.organisation_id}",
+        "EH_DEBUG_SCHEMA": "${user_config.debug_schema}",
         "EH_TOKEN_FILE": "${HOME}/.eh_mcp/token.json"
       }
     }
@@ -40,7 +41,8 @@
     {"name": "list_organisations", "description": "List organisations (id and name only)."},
     {"name": "list_teams", "description": "List teams in an organisation."},
     {"name": "list_work_locations", "description": "List work locations in an organisation."},
-    {"name": "employee_count", "description": "Total employee count for an organisation."}
+    {"name": "employee_count", "description": "Total employee count for an organisation."},
+    {"name": "verify_api_schema", "description": "Developer setup probe: API field names and types only (off unless enabled)."}
   ],
   "user_config": {
     "client_id": {
@@ -79,6 +81,13 @@
       "default": 8765,
       "min": 1024,
       "max": 65535
+    },
+    "debug_schema": {
+      "type": "boolean",
+      "title": "Developer: expose schema probe",
+      "description": "Adds a verify_api_schema tool reporting API field names and types (never values). Used once during setup. Leave off for normal use.",
+      "required": false,
+      "default": false
     }
   }
 }
