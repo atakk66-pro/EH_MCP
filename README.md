@@ -143,10 +143,10 @@ is click-through, with no Python, `pip`, or config files. Full step-by-step:
 
 1. Build the bundle once (you, the maintainer):
    ```bash
-   # name it after the manifest.json version, e.g. 0.4.0:
-   npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.4.0.mcpb"
+   # name it after the manifest.json version, e.g. 0.4.1:
+   npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.4.1.mcpb"
    ```
-   Or just push a `v0.4.0` tag and let the release workflow build and publish it.
+   Or just push a `v0.4.1` tag and let the release workflow build and publish it.
    (~20 KB; uses the `uv` server type, so Claude Desktop provisions Python and
    dependencies itself.)
 2. Send that one file to each director.

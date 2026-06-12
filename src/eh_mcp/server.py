@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 import os
-import secrets
 import sys
 import threading
 import urllib.parse
@@ -64,8 +63,6 @@ T = TypeVar("T")
 # tests, etc.) work without credentials present.
 _client: EHClient | None = None
 _client_lock = threading.Lock()
-# Holds the expected OAuth `state` between connect and complete (paste flow).
-_pending_state: dict[str, str] = {}
 
 
 def _get_client() -> EHClient:
@@ -157,9 +154,10 @@ async def connect_employment_hero(force_reconnect: bool = False) -> str:
         if await _run(lambda: _token_works(settings)):
             return "Already connected to Employment Hero."
 
-    state = secrets.token_urlsafe(16)
-    _pending_state["state"] = state
-    url = build_authorize_url(settings, state=state)
+    # EH's authorize endpoint accepts only client_id, redirect_uri,
+    # response_type (per the official Postman collection); any extra parameter
+    # (scope, state) is rejected with a 403.
+    url = build_authorize_url(settings)
     _open_browser_async(url)
     return (
         "To connect Employment Hero:\n\n"
@@ -184,17 +182,11 @@ async def complete_employment_hero_signin(redirect_url_or_code: str) -> str:
     except RuntimeError as exc:
         return f"Cannot connect: {exc}"
 
-    code, state = _extract_code_and_state(redirect_url_or_code)
+    code, _state = _extract_code_and_state(redirect_url_or_code)
     if not code:
         return (
             "I couldn't find a sign-in code in that. Paste the full web address "
             "from the page your browser landed on (it contains 'code=')."
-        )
-    expected = _pending_state.get("state")
-    if state and expected and state != expected:
-        return (
-            "That sign-in is from a different attempt. Ask me to connect "
-            "Employment Hero again and use the new link."
         )
 
     def go() -> str:
@@ -203,7 +195,6 @@ async def complete_employment_hero_signin(redirect_url_or_code: str) -> str:
         except OAuthFlowError as exc:
             return f"Sign-in failed: {exc}"
         _drop_client()
-        _pending_state.pop("state", None)
         return (
             "Connected to Employment Hero. You can now ask for teams, work "
             "locations, and headcount."

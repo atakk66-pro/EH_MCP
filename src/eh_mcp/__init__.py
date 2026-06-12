@@ -6,4 +6,4 @@ PII safety lives in two places, both enforced server-side:
 See README.md for the full design.
 """
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
