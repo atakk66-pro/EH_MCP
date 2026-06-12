@@ -4,13 +4,14 @@ A local [Model Context Protocol](https://modelcontextprotocol.io) server that
 exposes a small set of **read-only** Employment Hero queries to Claude Desktop,
 while keeping personal data out of the model.
 
-The goal is a director-level HR KPI layer (turnover, sickness, Bradford Factor,
-training compliance, and so on), all computed server-side and surfaced only as
-per-service aggregates. See [docs/KPI_ROADMAP.md](docs/KPI_ROADMAP.md) for what
-is buildable now, what needs a second integration, and what needs figures only
-the directors hold. The current code is the read-only foundation plus the
-[config layer](#kpi-configuration) those KPIs depend on; the KPI tools land once
-the schema is verified against a live token.
+It is a director-level HR KPI layer (turnover, retention, sickness, Bradford
+Factor, training compliance, and so on), all computed server-side and surfaced
+only as per-service aggregates. Phase 1 KPI tools are built; see
+[docs/KPI_ROADMAP.md](docs/KPI_ROADMAP.md) for what is live, what needs a second
+integration, and what needs figures only the directors hold. The KPI field
+mappings are confirmed against the API reference and Postman collection; a few
+tenant specifics (notably the employee-to-work-location link) are confirmed at
+first connect with the `verify_api_schema` probe.
 
 ## What it does, and what it deliberately does not
 
@@ -43,15 +44,28 @@ an allowlist model.
 
 ## Tools
 
-| Tool | Returns | Scope needed |
-|------|---------|--------------|
-| `list_organisations()` | `[{id, name}]` | none configured — may be implicit; verify live |
-| `list_teams(organisation_id)` | `[{id, name}]` | teams:list |
-| `list_work_locations(organisation_id)` | `[{id, name}]` | work_locations:list |
-| `employee_count(organisation_id)` | `int` | employees:list |
+**Lookups** (id + name only): `list_organisations`, `list_teams`,
+`list_work_locations`, `employee_count`.
 
-(`list_departments` was removed: Employment Hero exposes no read scope for
-departments, so it can never work. Use teams, work locations, or cost centres.)
+**KPIs** (per-service aggregates, no per-person data; periods default to the
+trailing 12 months):
+
+| Tool | Returns |
+|------|---------|
+| `staff_turnover` | leavers / average headcount per service |
+| `staff_retention` | share employed at period start still in post at end |
+| `leavers_by_length_of_service` | leavers bucketed by tenure (<3m … 2y+) |
+| `early_attrition` | share of leavers within the early-leaver window |
+| `starters_on_probation` | count currently in probation/trial |
+| `absence_summary` | sick hours/days + long-term-absence counts |
+| `bradford_hotspots` | Bradford Factor mean/max/over-threshold |
+| `training_compliance` | mandatory/safety cert compliance % |
+
+Every KPI returns one row per service (grouped by `service_grouping`, default
+`work_location`) plus an "All services" total. Computation runs server-side; the
+[KPI config](#kpi-configuration) supplies the sickness categories, certificate
+lists, and thresholds. `list_departments` was removed (EH exposes no read scope
+for departments).
 
 ## Prerequisites
 
@@ -129,8 +143,10 @@ is click-through, with no Python, `pip`, or config files. Full step-by-step:
 
 1. Build the bundle once (you, the maintainer):
    ```bash
-   npx -y @anthropic-ai/mcpb pack . employment-hero-readonly-0.2.0.mcpb
+   # name it after the manifest.json version, e.g. 0.3.0:
+   npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.3.0.mcpb"
    ```
+   Or just push a `v0.3.0` tag and let the release workflow build and publish it.
    (~20 KB; uses the `uv` server type, so Claude Desktop provisions Python and
    dependencies itself.)
 2. Send that one file to each director.

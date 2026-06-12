@@ -17,16 +17,33 @@ import os
 import sys
 import threading
 from collections.abc import Callable
+from datetime import date
 from typing import TypeVar
 
 import anyio
 from mcp.server.fastmcp import FastMCP
 
+from . import kpi
 from .auth import TokenManager, has_stored_token
 from .client import EHClient
 from .config import Settings, load_settings
+from .dates import add_days, parse_date
 from .errors import EHError
-from .models import NamedEntity, Organisation, to_named, to_org
+from .kpi_config import KpiConfig, KpiConfigError, load_kpi_config
+from .models import (
+    AbsenceRow,
+    BradfordRow,
+    ComplianceRow,
+    CountRow,
+    NamedEntity,
+    Organisation,
+    RateRow,
+    RetentionRow,
+    TenureBandsRow,
+    TurnoverRow,
+    to_named,
+    to_org,
+)
 from .oauth_flow import OAuthFlowError, run_authorization_flow
 from .schema import type_skeleton
 
@@ -275,6 +292,235 @@ def _debug_schema_enabled() -> bool:
 
 if _debug_schema_enabled():
     mcp.tool()(verify_api_schema)
+
+
+# -- KPI tools -----------------------------------------------------------
+
+
+def _load_kpi() -> KpiConfig:
+    try:
+        return load_kpi_config()
+    except KpiConfigError as exc:
+        raise EHError(
+            f"KPI configuration is not ready: {exc} The service grouping, "
+            "sickness categories, and thresholds come from that file."
+        ) from exc
+
+
+def _parse_period(period_start: str | None, period_end: str | None) -> tuple[date, date]:
+    end = parse_date(period_end) or date.today()
+    start = parse_date(period_start) or add_days(end, -365)
+    if start > end:
+        raise EHError("period_start is after period_end.")
+    return start, end
+
+
+def _employees(org: str) -> list[dict]:
+    # No member_type filter: terminated employees carry termination_date and are
+    # needed for turnover/retention.
+    return list(_get_client().paginate(f"/api/v1/organisations/{org}/employees"))
+
+
+def _leave_requests(org: str, start: date, end: date) -> list[dict]:
+    return list(
+        _get_client().paginate(
+            f"/api/v1/organisations/{org}/leave_requests",
+            params={"start_date": start.isoformat(), "end_date": end.isoformat()},
+        )
+    )
+
+
+def _leave_categories(org: str) -> list[dict]:
+    return list(_get_client().paginate(f"/api/v1/organisations/{org}/leave_categories"))
+
+
+@mcp.tool()
+async def staff_turnover(
+    organisation_id: str | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> list[TurnoverRow]:
+    """Staff turnover per service: leavers in the period over average headcount.
+
+    Dates are YYYY-MM-DD; default is the trailing 12 months. Returns one row per
+    service plus an "All services" total. Aggregates only — no per-person data.
+    """
+    logger.info("tool staff_turnover org=%s", organisation_id)
+
+    def go() -> list[TurnoverRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        start, end = _parse_period(period_start, period_end)
+        return kpi.turnover(_employees(org), _load_kpi(), start, end)
+
+    return await _run(go)
+
+
+@mcp.tool()
+async def staff_retention(
+    organisation_id: str | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> list[RetentionRow]:
+    """Staff retention per service: of those employed at the start of the period,
+    the share still employed at the end. Dates YYYY-MM-DD, default trailing 12
+    months. Aggregates only.
+    """
+    logger.info("tool staff_retention org=%s", organisation_id)
+
+    def go() -> list[RetentionRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        start, end = _parse_period(period_start, period_end)
+        return kpi.retention(_employees(org), _load_kpi(), start, end)
+
+    return await _run(go)
+
+
+@mcp.tool()
+async def leavers_by_length_of_service(
+    organisation_id: str | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> list[TenureBandsRow]:
+    """Leavers in the period bucketed by length of service (<3m, 3-6m, 6-12m,
+    1-2y, 2y+), per service. Dates YYYY-MM-DD, default trailing 12 months.
+    """
+    logger.info("tool leavers_by_length_of_service org=%s", organisation_id)
+
+    def go() -> list[TenureBandsRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        start, end = _parse_period(period_start, period_end)
+        return kpi.leavers_by_length_of_service(_employees(org), _load_kpi(), start, end)
+
+    return await _run(go)
+
+
+@mcp.tool()
+async def early_attrition(
+    organisation_id: str | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> list[RateRow]:
+    """Early attrition per service: of leavers in the period, the share whose
+    tenure was within the early-leaver window (set in the KPI config, default
+    180 days). Dates YYYY-MM-DD, default trailing 12 months.
+    """
+    logger.info("tool early_attrition org=%s", organisation_id)
+
+    def go() -> list[RateRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        start, end = _parse_period(period_start, period_end)
+        return kpi.early_attrition(_employees(org), _load_kpi(), start, end)
+
+    return await _run(go)
+
+
+@mcp.tool()
+async def starters_on_probation(
+    organisation_id: str | None = None, as_of: str | None = None
+) -> list[CountRow]:
+    """Count of active employees currently within their probation/trial period,
+    per service. as_of is YYYY-MM-DD (default today).
+    """
+    logger.info("tool starters_on_probation org=%s", organisation_id)
+
+    def go() -> list[CountRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        ref = parse_date(as_of) or date.today()
+        return kpi.starters_on_probation(_employees(org), _load_kpi(), ref)
+
+    return await _run(go)
+
+
+@mcp.tool()
+async def absence_summary(
+    organisation_id: str | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> list[AbsenceRow]:
+    """Sickness absence per service: total sick hours/days and a count of
+    long-term-absence spells (the threshold is in the KPI config, default 28
+    days). Sick leave is identified by the configured sickness categories. Dates
+    YYYY-MM-DD, default trailing 12 months. Aggregates only.
+    """
+    logger.info("tool absence_summary org=%s", organisation_id)
+
+    def go() -> list[AbsenceRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        start, end = _parse_period(period_start, period_end)
+        config = _load_kpi()
+        return kpi.absence_summary(
+            _employees(org),
+            _leave_requests(org, start, end),
+            _leave_categories(org),
+            config,
+        )
+
+    return await _run(go)
+
+
+@mcp.tool()
+async def bradford_hotspots(
+    organisation_id: str | None = None,
+    period_start: str | None = None,
+    period_end: str | None = None,
+) -> list[BradfordRow]:
+    """Bradford Factor absence hotspots per service: mean and max Bradford score
+    and the count of employees over the trigger threshold (100). Per-person
+    scores are never returned. Dates YYYY-MM-DD, default trailing 12 months.
+    """
+    logger.info("tool bradford_hotspots org=%s", organisation_id)
+
+    def go() -> list[BradfordRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        start, end = _parse_period(period_start, period_end)
+        config = _load_kpi()
+        return kpi.bradford_hotspots(
+            _employees(org),
+            _leave_requests(org, start, end),
+            _leave_categories(org),
+            config,
+        )
+
+    return await _run(go)
+
+
+@mcp.tool()
+async def training_compliance(
+    cert_set: str = "mandatory",
+    organisation_id: str | None = None,
+    as_of: str | None = None,
+) -> list[ComplianceRow]:
+    """Training/certification compliance per service: the share of active
+    employees holding every required certificate in the set, plus a count
+    expiring soon. cert_set is 'mandatory' or 'safety' (the required names come
+    from the KPI config). as_of is YYYY-MM-DD (default today).
+
+    Note: certifications are read per employee, so this iterates the whole
+    employee list and can be slow for large organisations.
+    """
+    logger.info("tool training_compliance set=%s org=%s", cert_set, organisation_id)
+    if cert_set not in ("mandatory", "safety"):
+        raise EHError("cert_set must be 'mandatory' or 'safety'.")
+
+    def go() -> list[ComplianceRow]:
+        org = _resolve_org(load_settings(), organisation_id)
+        ref = parse_date(as_of) or date.today()
+        client = _get_client()
+        employees = _employees(org)
+        pairs: list[tuple[dict, list[dict]]] = []
+        for emp in employees:
+            emp_id = emp.get("id")
+            if not emp_id:
+                continue
+            certs = list(
+                client.paginate(
+                    f"/api/v1/organisations/{org}/employees/{emp_id}/certifications"
+                )
+            )
+            pairs.append((emp, certs))
+        return kpi.training_compliance(pairs, _load_kpi(), cert_set, ref)
+
+    return await _run(go)
 
 
 def _configure_logging() -> None:

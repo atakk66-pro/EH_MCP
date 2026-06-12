@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "employment-hero-readonly",
   "display_name": "Employment Hero (read-only)",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Read-only Employment Hero access for Claude Desktop: aggregate, PII-minimising HR figures for care directors.",
   "long_description": "Connects Claude to your Employment Hero account, read-only. After installing, ask Claude to \"connect Employment Hero\" once to approve access in your browser, then ask for organisation, team, and work-location lists and headcount. No write access, and no individual employee fields (names, contact details, pay) are ever returned.",
   "author": {
@@ -42,6 +42,14 @@
     {"name": "list_teams", "description": "List teams in an organisation."},
     {"name": "list_work_locations", "description": "List work locations in an organisation."},
     {"name": "employee_count", "description": "Total employee count for an organisation."},
+    {"name": "staff_turnover", "description": "Staff turnover per service over a period."},
+    {"name": "staff_retention", "description": "Staff retention per service over a period."},
+    {"name": "leavers_by_length_of_service", "description": "Leavers bucketed by tenure, per service."},
+    {"name": "early_attrition", "description": "Early-leaver rate per service."},
+    {"name": "starters_on_probation", "description": "Count of staff currently in probation, per service."},
+    {"name": "absence_summary", "description": "Sickness hours/days and long-term-absence counts per service."},
+    {"name": "bradford_hotspots", "description": "Bradford Factor absence hotspots per service."},
+    {"name": "training_compliance", "description": "Mandatory/safety certification compliance per service."},
     {"name": "verify_api_schema", "description": "Developer setup probe: API field names and types only (off unless enabled)."}
   ],
   "user_config": {

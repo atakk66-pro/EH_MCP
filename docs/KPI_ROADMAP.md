@@ -15,7 +15,16 @@ token. See the caveats at the end.
 
 ## Build phases
 
-### Phase 1 — core HR API, read scopes, buildable now
+### Phase 1 — core HR API, read scopes — BUILT (v0.3.0)
+Tools live in `kpi.py` (pure computations, unit-tested) and `server.py`:
+`staff_turnover`, `staff_retention`, `leavers_by_length_of_service`,
+`early_attrition`, `starters_on_probation`, `absence_summary`,
+`bradford_hotspots`, `training_compliance`. Each returns per-service rows plus an
+"All services" total, grouped by `service_grouping` (default work_location),
+with an "Unassigned" bucket when membership is unresolved. Pending live
+confirmation: the employee-to-work-location link and the exact response field
+names / status enums (the `verify_api_schema` probe settles both).
+
 All from `GET /api/v1/organisations/{id}/employees`, `/leave_requests`, and the
 per-employee certifications endpoint (the app has `employees_certifications:list`;
 no org-level certifications scope is configured, so training compliance is

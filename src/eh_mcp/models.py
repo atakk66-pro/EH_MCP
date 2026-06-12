@@ -43,3 +43,74 @@ def to_named(raw: dict) -> NamedEntity:
     raw record; that would defeat the allowlist.
     """
     return NamedEntity(id=str(raw.get("id", "")), name=str(raw.get("name", "")))
+
+
+# -- KPI result models ---------------------------------------------------
+#
+# Every KPI tool returns a list of these. They carry only a service id/name and
+# numbers — never a person's name, id, or any per-person row. The org-wide row
+# uses service_id "__all__". See docs/ALLOWLIST.md.
+
+
+class TurnoverRow(BaseModel):
+    service_id: str
+    service_name: str
+    leavers: int
+    average_headcount: float
+    turnover_rate_pct: float
+
+
+class RetentionRow(BaseModel):
+    service_id: str
+    service_name: str
+    starting_headcount: int
+    retained: int
+    retention_rate_pct: float
+
+
+class TenureBandsRow(BaseModel):
+    service_id: str
+    service_name: str
+    leavers: int
+    bands: dict[str, int]
+
+
+class CountRow(BaseModel):
+    service_id: str
+    service_name: str
+    count: int
+
+
+class RateRow(BaseModel):
+    service_id: str
+    service_name: str
+    count: int
+    denominator: int
+    rate_pct: float
+
+
+class AbsenceRow(BaseModel):
+    service_id: str
+    service_name: str
+    sick_hours: float
+    sick_days: int
+    long_term_absence_cases: int
+
+
+class BradfordRow(BaseModel):
+    service_id: str
+    service_name: str
+    employees_with_absence: int
+    mean_bradford: float
+    max_bradford: int
+    over_threshold: int
+
+
+class ComplianceRow(BaseModel):
+    service_id: str
+    service_name: str
+    cert_set: str
+    compliant_employees: int
+    total_employees: int
+    compliance_rate_pct: float
+    expiring_soon: int

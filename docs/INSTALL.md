@@ -11,16 +11,18 @@ is handled by Claude Desktop at install time via the `uv` runtime.
 ```bash
 cd "Project for EH Noblecare"
 npx -y @anthropic-ai/mcpb validate manifest.json   # optional sanity check
-npx -y @anthropic-ai/mcpb pack . employment-hero-readonly-0.2.0.mcpb
+# name it after the manifest.json version (currently 0.3.0):
+npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.3.0.mcpb"
 ```
 
 (Pass the output filename explicitly: without it, `mcpb pack .` names the file
-after the directory.)
+after the directory.) Better still: push a `v0.3.0` tag and let
+`.github/workflows/release.yml` build and publish a checksummed `.mcpb` on the
+Releases page.
 
-Send `employment-hero-readonly-0.2.0.mcpb` (the version number is in the
-filename) to each director (email, shared drive, or attach it to a GitHub
-release). It contains no secrets; the Client ID/Secret are entered per-person at
-install time.
+Send the `.mcpb` (the latest from the Releases page) to each director by email
+or shared drive. It contains no secrets; the Client ID/Secret are entered
+per-person at install time.
 
 Before anyone installs, make sure the Employment Hero app exists:
 - An EH plan with API access (**Platinum or above**).
@@ -33,7 +35,7 @@ Before anyone installs, make sure the Employment Hero app exists:
 
 1. Open Claude Desktop. Go to **Settings > Extensions**.
 2. Under **Advanced / Extension Developer**, choose **Install Extension...** and
-   pick the `employment-hero-readonly-0.2.0.mcpb` file you were sent.
+   pick the `the latest employment-hero-readonly .mcpb` file you were sent.
 3. In the install dialog, paste the **Client ID** and **Client Secret** you were
    given, and the **Organisation ID** if you were given one (it lets everything
    work without an extra lookup). Leave the other fields at their defaults. The
