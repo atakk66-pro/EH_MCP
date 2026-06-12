@@ -63,8 +63,8 @@ def test_exchange_code_stores_and_returns_refresh_token(monkeypatch, tmp_path):
         return FakeResponse(200, {"access_token": "at", "refresh_token": "rt-new"})
 
     monkeypatch.setattr(flow_mod.httpx, "post", fake_post)
-    rt = exchange_code_for_refresh_token(make_settings(token_file), "the-code")
-    assert rt == "rt-new"
+    payload = exchange_code_for_refresh_token(make_settings(token_file), "the-code")
+    assert payload["refresh_token"] == "rt-new"
     assert json.loads(token_file.read_text())["refresh_token"] == "rt-new"
 
 

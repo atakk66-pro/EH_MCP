@@ -110,8 +110,10 @@ def build_authorize_url(settings: Settings, state: str | None = None) -> str:
     return f"{settings.oauth_base}/oauth2/authorize?{urllib.parse.urlencode(params)}"
 
 
-def exchange_code_for_refresh_token(settings: Settings, code: str) -> str:
-    """Exchange an authorization code for a refresh token and store it."""
+def exchange_code_for_refresh_token(settings: Settings, code: str) -> dict:
+    """Exchange an authorization code for a refresh token, store it, and return
+    the token response payload (so callers can inspect the granted scope etc.).
+    """
     # EH's token endpoint reads parameters from the query string, not the body
     # (confirmed from the official Postman collection).
     resp = httpx.post(
@@ -129,11 +131,29 @@ def exchange_code_for_refresh_token(settings: Settings, code: str) -> str:
         raise OAuthFlowError(
             f"Token exchange with Employment Hero failed ({resp.status_code})."
         )
-    refresh_token = resp.json().get("refresh_token")
+    payload = resp.json()
+    refresh_token = payload.get("refresh_token")
     if not refresh_token:
         raise OAuthFlowError("Employment Hero did not return a refresh token.")
     store_refresh_token(settings.token_file, refresh_token)
-    return refresh_token
+    return payload
+
+
+def token_response_summary(payload: dict) -> str:
+    """A PII-free, token-free summary of the token response for diagnostics:
+    the granted scope and any non-secret context fields (e.g. organisation id)."""
+    secret_keys = {"access_token", "refresh_token", "id_token"}
+    parts = []
+    scope = payload.get("scope")
+    parts.append(f"granted scope: {scope if scope else '(none)'}")
+    extras = {
+        k: v
+        for k, v in payload.items()
+        if k not in secret_keys and k != "scope" and not isinstance(v, (dict, list))
+    }
+    if extras:
+        parts.append("other fields: " + ", ".join(f"{k}={v}" for k, v in extras.items()))
+    return "; ".join(parts)
 
 
 def run_authorization_flow(
@@ -242,4 +262,4 @@ def run_authorization_flow(
             "Timed out waiting for you to approve access in the browser. "
             f"If the browser did not open, visit:\n{authorize_url}"
         )
-    return exchange_code_for_refresh_token(settings, code)
+    return exchange_code_for_refresh_token(settings, code).get("refresh_token", "")

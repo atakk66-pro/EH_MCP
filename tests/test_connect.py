@@ -63,7 +63,7 @@ def test_complete_exchanges_code_and_connects(monkeypatch, tmp_path):
 
         captured["code"] = code
         store_refresh_token(settings.token_file, "rt-live")
-        return "rt-live"
+        return {"refresh_token": "rt-live", "scope": "teams:list employees:list"}
 
     monkeypatch.setattr(server, "exchange_code_for_refresh_token", fake_exchange)
 
@@ -74,6 +74,24 @@ def test_complete_exchanges_code_and_connects(monkeypatch, tmp_path):
     )
     assert "Connected to Employment Hero" in msg
     assert captured["code"] == "GOOD"
+
+
+def test_complete_reports_no_scopes(monkeypatch, tmp_path):
+    s = _settings(tmp_path)
+    monkeypatch.setattr(server, "load_settings", lambda: s)
+
+    def fake_exchange(settings, code):
+        from eh_mcp.auth import store_refresh_token
+
+        store_refresh_token(settings.token_file, "rt")
+        return {"refresh_token": "rt", "scope": "", "organisation_id": "280394"}
+
+    monkeypatch.setattr(server, "exchange_code_for_refresh_token", fake_exchange)
+    msg = asyncio.run(
+        server.complete_employment_hero_signin("https://x/cb?code=GOOD")
+    )
+    assert "NO scopes" in msg
+    assert "280394" in msg  # surfaces context fields for diagnosis
 
 
 def test_complete_without_code_asks_again(monkeypatch, tmp_path):

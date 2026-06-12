@@ -50,6 +50,7 @@ from .oauth_flow import (
     OAuthFlowError,
     build_authorize_url,
     exchange_code_for_refresh_token,
+    token_response_summary,
 )
 from .schema import type_skeleton
 
@@ -191,13 +192,20 @@ async def complete_employment_hero_signin(redirect_url_or_code: str) -> str:
 
     def go() -> str:
         try:
-            exchange_code_for_refresh_token(settings, code)
+            payload = exchange_code_for_refresh_token(settings, code)
         except OAuthFlowError as exc:
             return f"Sign-in failed: {exc}"
         _drop_client()
+        summary = token_response_summary(payload)
+        if not payload.get("scope"):
+            return (
+                "Signed in, but Employment Hero granted NO scopes, so the token "
+                "cannot read any data. Diagnostic from the sign-in response — "
+                f"{summary}. Send this to whoever set up the integration."
+            )
         return (
             "Connected to Employment Hero. You can now ask for teams, work "
-            "locations, and headcount."
+            f"locations, and headcount.\n\n(Diagnostic: {summary})"
         )
 
     return await _run(go)
