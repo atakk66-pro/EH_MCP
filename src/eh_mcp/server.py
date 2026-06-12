@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 import sys
 import threading
 from collections.abc import Callable
@@ -44,7 +45,7 @@ from .models import (
     to_named,
     to_org,
 )
-from .oauth_flow import OAuthFlowError, run_authorization_flow
+from .oauth_flow import build_authorize_url, run_authorization_flow
 from .schema import type_skeleton
 
 logger = logging.getLogger("eh_mcp.tools")
@@ -59,6 +60,9 @@ _client: EHClient | None = None
 _client_lock = threading.Lock()
 # Guards against two concurrent sign-in flows fighting over the loopback port.
 _connect_lock = threading.Lock()
+# Tracks the background sign-in so connect can return immediately (avoiding the
+# MCP tool-call timeout) while connection_status reports progress.
+_auth_state: dict[str, str] = {"status": "idle", "detail": ""}
 
 
 def _get_client() -> EHClient:
@@ -94,13 +98,37 @@ async def _run(fn: Callable[[], T]) -> T:
     return await anyio.to_thread.run_sync(fn)
 
 
+def _token_works(settings: Settings) -> bool:
+    try:
+        TokenManager(settings).access_token()
+        return True
+    except Exception:
+        return False
+
+
+def _background_authorize(settings: Settings, state: str) -> None:
+    """Run the (blocking) browser sign-in off the tool call. Records the outcome
+    in _auth_state and always releases the connect lock."""
+    try:
+        run_authorization_flow(settings, state=state)
+        _drop_client()
+        _auth_state.update(status="connected", detail="")
+        logger.info("background sign-in completed")
+    except Exception as exc:  # noqa: BLE001 — the thread must never die silently
+        _auth_state.update(status="failed", detail=str(exc))
+        logger.warning("sign-in did not complete: %s", exc)
+    finally:
+        _connect_lock.release()
+
+
 @mcp.tool()
 async def connect_employment_hero(force_reconnect: bool = False) -> str:
-    """Sign in to Employment Hero. Run this once before asking for any data.
+    """Start sign-in to Employment Hero. Run this once before asking for data.
 
-    Opens the browser to approve read-only access. If a working connection
-    already exists this does nothing; pass force_reconnect=true to sign in
-    again deliberately.
+    Opens the browser to approve read-only access and returns immediately; the
+    sign-in finishes in the background. After approving, ask me to check the
+    connection. If a working connection already exists this does nothing unless
+    force_reconnect is true.
     """
     logger.info("tool connect_employment_hero force=%s", force_reconnect)
     try:
@@ -108,51 +136,57 @@ async def connect_employment_hero(force_reconnect: bool = False) -> str:
     except RuntimeError as exc:
         return f"Cannot connect: {exc}"
 
-    def go() -> str:
-        if not _connect_lock.acquire(blocking=False):
-            return (
-                "A sign-in is already in progress. Finish it in the browser, "
-                "then check connection_status."
-            )
-        try:
-            if not force_reconnect and has_stored_token(settings.token_file):
-                try:
-                    TokenManager(settings).access_token()
-                    return (
-                        "Already connected to Employment Hero. Use "
-                        "force_reconnect=true to sign in again."
-                    )
-                except Exception:
-                    # Stored token is stale or revoked: fall through to a
-                    # fresh browser sign-in.
-                    logger.info("stored token unusable, starting fresh sign-in")
-            try:
-                run_authorization_flow(settings)
-            except OAuthFlowError as exc:
-                return f"Could not connect to Employment Hero: {exc}"
-            _drop_client()
-            return (
-                "Connected to Employment Hero. You can now ask for teams, work "
-                "locations, and headcount."
-            )
-        finally:
-            _connect_lock.release()
+    if not force_reconnect and has_stored_token(settings.token_file):
+        if await _run(lambda: _token_works(settings)):
+            return "Already connected to Employment Hero."
 
-    return await _run(go)
+    if not _connect_lock.acquire(blocking=False):
+        return (
+            "A sign-in is already in progress. Approve it in your browser, then "
+            "ask me to check the Employment Hero connection."
+        )
+
+    state = secrets.token_urlsafe(32)
+    url = build_authorize_url(settings, state=state)
+    _auth_state.update(status="in_progress", detail="")
+    threading.Thread(
+        target=_background_authorize, args=(settings, state), daemon=True
+    ).start()
+    return (
+        "Opening Employment Hero sign-in in your browser. Sign in and approve "
+        "access. If the browser warns 'your connection is not private' on a "
+        "127.0.0.1 page, click Advanced then Proceed (it is your own computer). "
+        "When done, ask me to check the Employment Hero connection.\n\n"
+        f"If no browser opened, open this link yourself:\n{url}"
+    )
 
 
 @mcp.tool()
 async def connection_status() -> str:
-    """Report whether this machine has a saved Employment Hero connection."""
+    """Report whether this machine is signed in to Employment Hero."""
     logger.info("tool connection_status")
     try:
         settings = load_settings()
     except RuntimeError as exc:
         return f"Not configured: {exc}"
-    if has_stored_token(settings.token_file):
+
+    status = _auth_state.get("status")
+    if status == "in_progress":
         return (
-            "A connection to Employment Hero is saved on this machine. If data "
-            "requests fail, ask me to connect Employment Hero again."
+            "Sign-in is in progress. Finish approving access in your browser, "
+            "then check again."
+        )
+    if status == "failed":
+        return (
+            f"The last sign-in did not complete: {_auth_state.get('detail')}. "
+            "Ask me to connect Employment Hero to try again."
+        )
+    if has_stored_token(settings.token_file):
+        if await _run(lambda: _token_works(settings)):
+            return "Connected to Employment Hero."
+        return (
+            "A saved connection exists but is not working. Ask me to connect "
+            "Employment Hero again."
         )
     return (
         "Not connected to Employment Hero yet. Ask me to connect Employment "

@@ -139,15 +139,21 @@ def run_authorization_flow(
     *,
     timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
     open_browser: bool = True,
+    state: str | None = None,
 ) -> str:
-    """Run the full browser sign-in. Returns the refresh token on success."""
+    """Run the full browser sign-in. Returns the refresh token on success.
+
+    Usually called from a background thread (the connect tool returns
+    immediately), so it can block for the full timeout without affecting the
+    MCP tool call.
+    """
     redirect = urllib.parse.urlparse(settings.redirect_uri)
     host = redirect.hostname or "127.0.0.1"
     port = redirect.port or 8765
     # Random per-flow state: the handler ignores any callback that does not
     # echo it back, so another local process or a malicious web page cannot
     # inject an attacker-chosen authorization code (login CSRF).
-    expected_state = secrets.token_urlsafe(32)
+    expected_state = state or secrets.token_urlsafe(32)
     result: dict[str, str] = {}
 
     class _Handler(http.server.BaseHTTPRequestHandler):
@@ -208,7 +214,13 @@ def run_authorization_flow(
     thread.start()
     try:
         if open_browser:
-            webbrowser.open(authorize_url)
+            try:
+                webbrowser.open(authorize_url)
+            except Exception as exc:
+                # A failure to launch the browser must not abort the flow: the
+                # user can still open the URL manually (it is in the connect
+                # tool's response and the logs).
+                logger.warning("could not open browser automatically: %s", exc)
         deadline = time.monotonic() + timeout_seconds
         while time.monotonic() < deadline:
             if "code" in result or "error" in result:

@@ -11,12 +11,12 @@ is handled by Claude Desktop at install time via the `uv` runtime.
 ```bash
 cd "Project for EH Noblecare"
 npx -y @anthropic-ai/mcpb validate manifest.json   # optional sanity check
-# name it after the manifest.json version (currently 0.3.1):
-npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.3.1.mcpb"
+# name it after the manifest.json version (currently 0.3.2):
+npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.3.2.mcpb"
 ```
 
 (Pass the output filename explicitly: without it, `mcpb pack .` names the file
-after the directory.) Better still: push a `v0.3.1` tag and let
+after the directory.) Better still: push a `v0.3.2` tag and let
 `.github/workflows/release.yml` build and publish a checksummed `.mcpb` on the
 Releases page.
 
