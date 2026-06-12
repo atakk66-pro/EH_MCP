@@ -330,7 +330,9 @@ def absence_summary(
     g: dict[tuple, dict] = defaultdict(lambda: {"hours": 0.0, "days": 0, "lta": 0})
 
     for req in leave_requests:
-        if sick_ids and str(req.get("leave_category_id", "")) not in sick_ids:
+        # No configured sickness categories => count nothing (never treat all
+        # leave as sickness).
+        if not sick_ids or str(req.get("leave_category_id", "")) not in sick_ids:
             continue
         key = svc.get(str(req.get("employee_id")), UNASSIGNED)
         bucket = g[key]
@@ -375,7 +377,7 @@ def bradford_hotspots(
     # Per-employee spell count and day total.
     per_emp: dict[str, dict] = defaultdict(lambda: {"spells": 0, "days": 0})
     for req in leave_requests:
-        if sick_ids and str(req.get("leave_category_id", "")) not in sick_ids:
+        if not sick_ids or str(req.get("leave_category_id", "")) not in sick_ids:
             continue
         eid = str(req.get("employee_id"))
         start = parse_date(req.get("start_date"))

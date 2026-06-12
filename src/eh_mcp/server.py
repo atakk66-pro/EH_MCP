@@ -298,13 +298,15 @@ if _debug_schema_enabled():
 
 
 def _load_kpi() -> KpiConfig:
+    # If no config file exists, fall back to safe defaults. Headcount-based KPIs
+    # (turnover, retention, tenure, probation) work out of the box; the
+    # sickness/training KPIs need the category and certificate lists, so they
+    # return zeros until kpi_config.yaml supplies them.
     try:
         return load_kpi_config()
-    except KpiConfigError as exc:
-        raise EHError(
-            f"KPI configuration is not ready: {exc} The service grouping, "
-            "sickness categories, and thresholds come from that file."
-        ) from exc
+    except KpiConfigError:
+        logger.info("no KPI config found; using defaults (work_location grouping)")
+        return KpiConfig(service_grouping="work_location")
 
 
 def _parse_period(period_start: str | None, period_end: str | None) -> tuple[date, date]:

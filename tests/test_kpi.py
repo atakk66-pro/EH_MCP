@@ -218,6 +218,17 @@ def test_unassigned_bucket_when_grouping_field_missing():
     assert names == {"Unassigned"}
 
 
+def test_absence_counts_nothing_when_no_sickness_configured():
+    # Default config has empty sickness_categories; must not treat all leave as
+    # sickness.
+    employees = [emp("1", "2020-01-01", loc="Oak House")]
+    cats = [{"id": "sick", "name": "Sick Leave"}]
+    requests = [leave("1", "sick", "2025-03-01", "2025-03-30", hours=8)]
+    default_cfg = KpiConfig(service_grouping="work_location")
+    t = total_row(kpi.absence_summary(employees, requests, cats, default_cfg))
+    assert t.sick_days == 0 and t.long_term_absence_cases == 0
+
+
 def test_team_grouping_uses_first_team():
     ps, pe = date(2025, 1, 1), date(2025, 12, 31)
     employees = [
