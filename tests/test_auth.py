@@ -42,8 +42,8 @@ def test_refresh_returns_access_token_and_caches(monkeypatch, tmp_path):
     write_token(token_file, "rt-1")
     posts = []
 
-    def fake_post(url, data=None, timeout=None):
-        posts.append(data)
+    def fake_post(url, params=None, timeout=None):
+        posts.append(params)
         return FakeResponse(200, {"access_token": "at-1", "expires_in": 900})
 
     monkeypatch.setattr(auth_mod.httpx, "post", fake_post)
@@ -61,7 +61,7 @@ def test_rotated_refresh_token_is_persisted(monkeypatch, tmp_path):
     token_file = tmp_path / "token.json"
     write_token(token_file, "rt-1")
 
-    def fake_post(url, data=None, timeout=None):
+    def fake_post(url, params=None, timeout=None):
         return FakeResponse(
             200, {"access_token": "at-1", "refresh_token": "rt-2", "expires_in": 900}
         )
@@ -79,8 +79,8 @@ def test_invalidate_forces_new_refresh(monkeypatch, tmp_path):
     write_token(token_file, "rt-1")
     posts = []
 
-    def fake_post(url, data=None, timeout=None):
-        posts.append(data)
+    def fake_post(url, params=None, timeout=None):
+        posts.append(params)
         return FakeResponse(200, {"access_token": "at", "expires_in": 900})
 
     monkeypatch.setattr(auth_mod.httpx, "post", fake_post)
@@ -102,7 +102,7 @@ def test_failed_refresh_raises(monkeypatch, tmp_path):
     token_file = tmp_path / "token.json"
     write_token(token_file, "rt-1")
 
-    def fake_post(url, data=None, timeout=None):
+    def fake_post(url, params=None, timeout=None):
         return FakeResponse(400, {"error": "invalid_grant"})
 
     monkeypatch.setattr(auth_mod.httpx, "post", fake_post)

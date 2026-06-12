@@ -57,9 +57,9 @@ def test_build_authorize_url_includes_state_when_given(tmp_path):
 def test_exchange_code_stores_and_returns_refresh_token(monkeypatch, tmp_path):
     token_file = tmp_path / "token.json"
 
-    def fake_post(url, data=None, timeout=None):
-        assert data["grant_type"] == "authorization_code"
-        assert data["code"] == "the-code"
+    def fake_post(url, params=None, timeout=None):
+        assert params["grant_type"] == "authorization_code"
+        assert params["code"] == "the-code"
         return FakeResponse(200, {"access_token": "at", "refresh_token": "rt-new"})
 
     monkeypatch.setattr(flow_mod.httpx, "post", fake_post)
@@ -134,13 +134,13 @@ def test_full_flow_over_tls_loopback(monkeypatch, tmp_path):
     captured = {}
     monkeypatch.setattr(flow.webbrowser, "open", lambda url: captured.update(url=url))
 
-    def fake_post(url, data=None, timeout=None):
+    def fake_post(url, params=None, timeout=None):
         class R:
             status_code = 200
 
             @staticmethod
             def json():
-                assert data["code"] == "good-code"
+                assert params["code"] == "good-code"
                 return {"access_token": "at", "refresh_token": "rt-live"}
 
         return R()

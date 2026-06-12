@@ -95,11 +95,13 @@ class OAuthFlowError(RuntimeError):
 
 
 def build_authorize_url(settings: Settings, state: str | None = None) -> str:
+    # EH's authorize endpoint takes only client_id, redirect_uri, response_type
+    # (confirmed from the official Postman collection). Scopes are bound to the
+    # app at registration, NOT requested here; sending a scope param is rejected.
     params = {
         "client_id": settings.client_id,
         "redirect_uri": settings.redirect_uri,
         "response_type": "code",
-        "scope": settings.scopes,
     }
     if state:
         params["state"] = state
@@ -108,9 +110,11 @@ def build_authorize_url(settings: Settings, state: str | None = None) -> str:
 
 def exchange_code_for_refresh_token(settings: Settings, code: str) -> str:
     """Exchange an authorization code for a refresh token and store it."""
+    # EH's token endpoint reads parameters from the query string, not the body
+    # (confirmed from the official Postman collection).
     resp = httpx.post(
         f"{settings.oauth_base}/oauth2/token",
-        data={
+        params={
             "client_id": settings.client_id,
             "client_secret": settings.client_secret,
             "grant_type": "authorization_code",

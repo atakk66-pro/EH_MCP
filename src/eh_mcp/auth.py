@@ -84,9 +84,11 @@ class TokenManager:
 
     def _refresh_locked(self) -> str:
         refresh_token = self._load_refresh_token()
+        # EH reads token params from the query string, not the body (per the
+        # official Postman collection).
         resp = httpx.post(
             f"{self._s.oauth_base}/oauth2/token",
-            data={
+            params={
                 "client_id": self._s.client_id,
                 "client_secret": self._s.client_secret,
                 "grant_type": "refresh_token",
