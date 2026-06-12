@@ -120,13 +120,19 @@ one code path parses employee records.
 
 Which category names count as sickness vs annual comes from
 `kpi_config.yaml` (`sickness_categories`, `annual_leave_categories`), validated
-against `leave_categories:list` at runtime.
+against `leave_categories:list` at runtime. **Leave Category schema (confirmed
+from the docs):** `id` (uuid), `name` (string), `leave_type` (enum), and
+`external_id`. The `leave_type` enum may classify sickness vs annual more
+robustly than name matching — confirm its values during the pilot.
 
 ### Leave balances (`employees:leave_balances:list`)
 
+Schema confirmed from the docs: `category` (object), `balance` (number),
+`accrued` (number), `taken` (number), `units` (string: days/hours).
+
 | | |
 |---|---|
-| Server-internal | `employee_id` (correlation), category id/name, balance / accrued / taken amounts |
+| Server-internal | `employee_id` (correlation), `category`, `balance`, `accrued`, `taken`, `units` |
 | Model-visible | per-service totals and averages (e.g. mean remaining annual leave, % of entitlement used) |
 | Blocked | any per-person balance |
 
