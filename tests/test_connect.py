@@ -48,8 +48,8 @@ def test_connect_returns_signin_link(monkeypatch, tmp_path):
     msg = asyncio.run(server.connect_employment_hero())
     assert "oauth.employmenthero.com/oauth2/authorize" in msg
     assert "code=" in msg  # instructs the user to copy the code-bearing URL
-    # EH rejects extra params: the authorize URL must NOT carry scope or state.
-    assert "scope=" not in msg
+    # scope IS required (the token only gets the scopes requested); state is not.
+    assert "scope=" in msg
     assert "state=" not in msg
 
 

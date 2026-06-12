@@ -95,13 +95,15 @@ class OAuthFlowError(RuntimeError):
 
 
 def build_authorize_url(settings: Settings, state: str | None = None) -> str:
-    # EH's authorize endpoint takes only client_id, redirect_uri, response_type
-    # (confirmed from the official Postman collection). Scopes are bound to the
-    # app at registration, NOT requested here; sending a scope param is rejected.
+    # The scope param IS required: EH grants the token only the scopes requested
+    # here (intersected with the app's configured scopes). Without it the token
+    # has no permissions and every API call 403s. The earlier 403 that looked
+    # scope-related was actually the 127.0.0.1 redirect (now a hosted page).
     params = {
         "client_id": settings.client_id,
         "redirect_uri": settings.redirect_uri,
         "response_type": "code",
+        "scope": settings.scopes,
     }
     if state:
         params["state"] = state
