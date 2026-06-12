@@ -11,12 +11,12 @@ is handled by Claude Desktop at install time via the `uv` runtime.
 ```bash
 cd "Project for EH Noblecare"
 npx -y @anthropic-ai/mcpb validate manifest.json   # optional sanity check
-# name it after the manifest.json version (currently 0.3.2):
-npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.3.2.mcpb"
+# name it after the manifest.json version (currently 0.4.0):
+npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.4.0.mcpb"
 ```
 
 (Pass the output filename explicitly: without it, `mcpb pack .` names the file
-after the directory.) Better still: push a `v0.3.2` tag and let
+after the directory.) Better still: push a `v0.4.0` tag and let
 `.github/workflows/release.yml` build and publish a checksummed `.mcpb` on the
 Releases page.
 
@@ -40,17 +40,20 @@ Before anyone installs, make sure the Employment Hero app exists:
    given, and the **Organisation ID** if you were given one (it lets everything
    work without an extra lookup). Leave the other fields at their defaults. The
    credentials are stored in your computer's keychain, not in a file.
-4. In a chat, type: **connect Employment Hero**.
-5. Your browser opens to the Employment Hero sign-in. Approve access.
-   - After you approve, the browser may show a **"your connection is not
-     private"** warning on a `127.0.0.1` address. This is expected and safe: the
-     page is on your own computer. Click **Advanced**, then **Proceed to
-     127.0.0.1**. (It appears because the local sign-in step uses a certificate
-     made on your machine rather than a public website's.)
-   - When the tab says sign-in is complete, you are done. You will not need to
-     do this again on this computer.
-6. Ask for what you need, for example: "List our work locations" or "How many
+4. In a chat, type: **connect Employment Hero**. Claude replies with a sign-in
+   **link**.
+5. **Click the link**, sign in as an administrator, and approve access.
+6. Your browser then tries to open a `127.0.0.1` page that **fails to load**
+   ("can't reach this site"). That is expected. **Copy the full web address**
+   from that page's address bar (it contains `code=`).
+7. Paste it back to Claude: **complete the Employment Hero sign-in with** <the
+   address you copied>. Claude confirms you are connected. You will not need to
+   do this again on this computer.
+8. Ask for what you need, for example: "List our work locations" or "How many
    employees do we have?".
+
+This sign-in deliberately uses no local server, so corporate networks,
+firewalls, and certificate policies do not interfere.
 
 ## If something goes wrong
 

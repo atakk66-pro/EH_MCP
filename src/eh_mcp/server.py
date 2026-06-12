@@ -17,6 +17,8 @@ import os
 import secrets
 import sys
 import threading
+import urllib.parse
+import webbrowser
 from collections.abc import Callable
 from datetime import date
 from typing import TypeVar
@@ -45,7 +47,11 @@ from .models import (
     to_named,
     to_org,
 )
-from .oauth_flow import build_authorize_url, run_authorization_flow
+from .oauth_flow import (
+    OAuthFlowError,
+    build_authorize_url,
+    exchange_code_for_refresh_token,
+)
 from .schema import type_skeleton
 
 logger = logging.getLogger("eh_mcp.tools")
@@ -58,11 +64,8 @@ T = TypeVar("T")
 # tests, etc.) work without credentials present.
 _client: EHClient | None = None
 _client_lock = threading.Lock()
-# Guards against two concurrent sign-in flows fighting over the loopback port.
-_connect_lock = threading.Lock()
-# Tracks the background sign-in so connect can return immediately (avoiding the
-# MCP tool-call timeout) while connection_status reports progress.
-_auth_state: dict[str, str] = {"status": "idle", "detail": ""}
+# Holds the expected OAuth `state` between connect and complete (paste flow).
+_pending_state: dict[str, str] = {}
 
 
 def _get_client() -> EHClient:
@@ -106,29 +109,43 @@ def _token_works(settings: Settings) -> bool:
         return False
 
 
-def _background_authorize(settings: Settings, state: str) -> None:
-    """Run the (blocking) browser sign-in off the tool call. Records the outcome
-    in _auth_state and always releases the connect lock."""
-    try:
-        run_authorization_flow(settings, state=state)
-        _drop_client()
-        _auth_state.update(status="connected", detail="")
-        logger.info("background sign-in completed")
-    except Exception as exc:  # noqa: BLE001 — the thread must never die silently
-        _auth_state.update(status="failed", detail=str(exc))
-        logger.warning("sign-in did not complete: %s", exc)
-    finally:
-        _connect_lock.release()
+def _open_browser_async(url: str) -> None:
+    """Best-effort browser launch off the tool call. If it fails, the user still
+    has the URL in the connect response."""
+
+    def go() -> None:
+        try:
+            webbrowser.open(url)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("could not open browser: %s", exc)
+
+    threading.Thread(target=go, daemon=True).start()
+
+
+def _extract_code_and_state(text: str) -> tuple[str | None, str | None]:
+    """Pull the code (and state) out of a pasted redirect URL, query string, or
+    a bare code."""
+    text = (text or "").strip().strip("<>\"'")
+    query = ""
+    if "://" in text:
+        query = urllib.parse.urlparse(text).query
+    elif "code=" in text:
+        query = text.lstrip("?")
+    if query:
+        params = urllib.parse.parse_qs(query)
+        code = params.get("code", [None])[0]
+        state = params.get("state", [None])[0]
+        if code:
+            return code, state
+    return (text or None), None
 
 
 @mcp.tool()
 async def connect_employment_hero(force_reconnect: bool = False) -> str:
-    """Start sign-in to Employment Hero. Run this once before asking for data.
-
-    Opens the browser to approve read-only access and returns immediately; the
-    sign-in finishes in the background. After approving, ask me to check the
-    connection. If a working connection already exists this does nothing unless
-    force_reconnect is true.
+    """Begin Employment Hero sign-in (no local server — works on locked-down
+    networks). Returns a link to approve access; after approving, paste the
+    address your browser lands on back to me using complete_employment_hero_signin.
+    Does nothing if already connected, unless force_reconnect is true.
     """
     logger.info("tool connect_employment_hero force=%s", force_reconnect)
     try:
@@ -140,25 +157,59 @@ async def connect_employment_hero(force_reconnect: bool = False) -> str:
         if await _run(lambda: _token_works(settings)):
             return "Already connected to Employment Hero."
 
-    if not _connect_lock.acquire(blocking=False):
+    state = secrets.token_urlsafe(16)
+    _pending_state["state"] = state
+    url = build_authorize_url(settings, state=state)
+    _open_browser_async(url)
+    return (
+        "To connect Employment Hero:\n\n"
+        "1. Open this link (it may also open by itself), sign in as an "
+        f"administrator, and approve access:\n{url}\n\n"
+        "2. After you approve, the browser will try to open a 127.0.0.1 page "
+        'that fails to load ("can\'t reach this site"). That is expected and '
+        "fine.\n\n"
+        "3. Copy the FULL web address from that failed page's address bar (it "
+        "contains 'code=') and paste it back to me: complete the Employment "
+        "Hero sign-in with <that address>."
+    )
+
+
+@mcp.tool()
+async def complete_employment_hero_signin(redirect_url_or_code: str) -> str:
+    """Finish sign-in using the address (or code) from the page the browser
+    landed on after you approved access in Employment Hero."""
+    logger.info("tool complete_employment_hero_signin")
+    try:
+        settings = load_settings()
+    except RuntimeError as exc:
+        return f"Cannot connect: {exc}"
+
+    code, state = _extract_code_and_state(redirect_url_or_code)
+    if not code:
         return (
-            "A sign-in is already in progress. Approve it in your browser, then "
-            "ask me to check the Employment Hero connection."
+            "I couldn't find a sign-in code in that. Paste the full web address "
+            "from the page your browser landed on (it contains 'code=')."
+        )
+    expected = _pending_state.get("state")
+    if state and expected and state != expected:
+        return (
+            "That sign-in is from a different attempt. Ask me to connect "
+            "Employment Hero again and use the new link."
         )
 
-    state = secrets.token_urlsafe(32)
-    url = build_authorize_url(settings, state=state)
-    _auth_state.update(status="in_progress", detail="")
-    threading.Thread(
-        target=_background_authorize, args=(settings, state), daemon=True
-    ).start()
-    return (
-        "Opening Employment Hero sign-in in your browser. Sign in and approve "
-        "access. If the browser warns 'your connection is not private' on a "
-        "127.0.0.1 page, click Advanced then Proceed (it is your own computer). "
-        "When done, ask me to check the Employment Hero connection.\n\n"
-        f"If no browser opened, open this link yourself:\n{url}"
-    )
+    def go() -> str:
+        try:
+            exchange_code_for_refresh_token(settings, code)
+        except OAuthFlowError as exc:
+            return f"Sign-in failed: {exc}"
+        _drop_client()
+        _pending_state.pop("state", None)
+        return (
+            "Connected to Employment Hero. You can now ask for teams, work "
+            "locations, and headcount."
+        )
+
+    return await _run(go)
 
 
 @mcp.tool()
@@ -169,18 +220,6 @@ async def connection_status() -> str:
         settings = load_settings()
     except RuntimeError as exc:
         return f"Not configured: {exc}"
-
-    status = _auth_state.get("status")
-    if status == "in_progress":
-        return (
-            "Sign-in is in progress. Finish approving access in your browser, "
-            "then check again."
-        )
-    if status == "failed":
-        return (
-            f"The last sign-in did not complete: {_auth_state.get('detail')}. "
-            "Ask me to connect Employment Hero to try again."
-        )
     if has_stored_token(settings.token_file):
         if await _run(lambda: _token_works(settings)):
             return "Connected to Employment Hero."

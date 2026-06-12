@@ -1,19 +1,16 @@
-"""The connect tool must return immediately (not block for the whole sign-in),
-so the MCP tool call never times out. The sign-in finishes in the background and
-connection_status reflects it."""
+"""Tests for the copy-paste sign-in flow (no local server): connect returns a
+link, and complete exchanges the pasted code for a token."""
 
 import asyncio
-import time
 
 from eh_mcp import server
-from eh_mcp.auth import store_refresh_token
 from eh_mcp.config import Settings
 
 
 def _settings(tmp_path):
     return Settings(
-        client_id="c",
-        client_secret="s",
+        client_id="cid",
+        client_secret="secret",
         redirect_uri="https://127.0.0.1:8765/callback",
         api_base="https://api.employmenthero.com",
         oauth_base="https://oauth.employmenthero.com",
@@ -22,54 +19,80 @@ def _settings(tmp_path):
     )
 
 
-def test_connect_returns_before_signin_finishes(monkeypatch, tmp_path):
+def test_extract_code_from_full_url():
+    code, state = server._extract_code_and_state(
+        "https://127.0.0.1:8765/callback?code=ABC123&state=XYZ"
+    )
+    assert code == "ABC123"
+    assert state == "XYZ"
+
+
+def test_extract_code_from_bare_code():
+    code, state = server._extract_code_and_state("RAWCODE")
+    assert code == "RAWCODE"
+    assert state is None
+
+
+def test_extract_code_ignores_wrapping_quotes_and_brackets():
+    code, _ = server._extract_code_and_state(
+        "<https://127.0.0.1:8765/callback?code=Q1&state=s>"
+    )
+    assert code == "Q1"
+
+
+def test_connect_returns_signin_link(monkeypatch, tmp_path):
     s = _settings(tmp_path)
     monkeypatch.setattr(server, "load_settings", lambda: s)
-    server._auth_state.update(status="idle", detail="")
-    if server._connect_lock.locked():
-        server._connect_lock.release()
+    monkeypatch.setattr(server, "_open_browser_async", lambda url: None)
+    server._pending_state.clear()
 
-    def slow_flow(settings, state=None):
-        time.sleep(0.3)  # simulate the user taking time in the browser
+    msg = asyncio.run(server.connect_employment_hero())
+    assert "oauth.employmenthero.com/oauth2/authorize" in msg
+    assert "code=" in msg  # instructs the user to copy the code-bearing URL
+    assert server._pending_state.get("state")
+
+
+def test_complete_exchanges_code_and_connects(monkeypatch, tmp_path):
+    s = _settings(tmp_path)
+    monkeypatch.setattr(server, "load_settings", lambda: s)
+    captured = {}
+
+    def fake_exchange(settings, code):
+        from eh_mcp.auth import store_refresh_token
+
+        captured["code"] = code
         store_refresh_token(settings.token_file, "rt-live")
+        return "rt-live"
 
-    monkeypatch.setattr(server, "run_authorization_flow", slow_flow)
+    monkeypatch.setattr(server, "exchange_code_for_refresh_token", fake_exchange)
+    server._pending_state["state"] = "S1"
 
-    t0 = time.monotonic()
-    msg = asyncio.run(server.connect_employment_hero())
-    elapsed = time.monotonic() - t0
-
-    assert "Opening Employment Hero" in msg
-    assert elapsed < 0.2, "connect blocked instead of returning immediately"
-    assert server._auth_state["status"] == "in_progress"
-
-    # The background thread completes the sign-in shortly after.
-    for _ in range(50):
-        if server._auth_state["status"] == "connected":
-            break
-        time.sleep(0.05)
-    assert server._auth_state["status"] == "connected"
+    msg = asyncio.run(
+        server.complete_employment_hero_signin(
+            "https://127.0.0.1:8765/callback?code=GOOD&state=S1"
+        )
+    )
+    assert "Connected to Employment Hero" in msg
+    assert captured["code"] == "GOOD"
+    # state cleared after success
+    assert "state" not in server._pending_state
 
 
-def test_connect_records_failure_without_raising(monkeypatch, tmp_path):
+def test_complete_rejects_state_mismatch(monkeypatch, tmp_path):
     s = _settings(tmp_path)
     monkeypatch.setattr(server, "load_settings", lambda: s)
-    server._auth_state.update(status="idle", detail="")
-    if server._connect_lock.locked():
-        server._connect_lock.release()
+    server._pending_state["state"] = "EXPECTED"
 
-    def boom(settings, state=None):
-        raise RuntimeError("browser exploded")
+    msg = asyncio.run(
+        server.complete_employment_hero_signin(
+            "https://127.0.0.1:8765/callback?code=GOOD&state=WRONG"
+        )
+    )
+    assert "different attempt" in msg.lower()
 
-    monkeypatch.setattr(server, "run_authorization_flow", boom)
-    msg = asyncio.run(server.connect_employment_hero())
-    assert "Opening Employment Hero" in msg  # still returns cleanly
 
-    for _ in range(50):
-        if server._auth_state["status"] == "failed":
-            break
-        time.sleep(0.05)
-    assert server._auth_state["status"] == "failed"
-    assert "browser exploded" in server._auth_state["detail"]
-    # The lock must be released even on failure, so a retry can proceed.
-    assert not server._connect_lock.locked()
+def test_complete_without_code_asks_again(monkeypatch, tmp_path):
+    s = _settings(tmp_path)
+    monkeypatch.setattr(server, "load_settings", lambda: s)
+    msg = asyncio.run(server.complete_employment_hero_signin(""))
+    assert "couldn't find a sign-in code" in msg.lower()
