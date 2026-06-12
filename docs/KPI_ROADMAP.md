@@ -124,30 +124,38 @@ uncertainties:
   (B7). The registered app's actual 22 scopes (resource:action format) are
   catalogued in [ALLOWLIST.md](ALLOWLIST.md).
 
-## Confirmed from the API reference (developer.employmenthero.com/api-references)
+## Confirmed (API reference + Postman collection)
 
+- **Base URL + paths: CONFIRMED.** `https://api.employmenthero.com/api` +
+  `/v1/organisations/...`; the server's `/api/v1/...` paths are correct.
 - **Envelope and pagination: CONFIRMED.** `{"data": {"items": [...],
-  "page_index", "item_per_page", "total_items", "total_pages"}}`; `page_index`
-  min 1, `item_per_page` default 20 / max 100. `client.py` already matches.
-- **Employee schema: CONFIRMED.** Real field names known (`id` is a UUID;
-  `start_date`, `termination_date`, `status`, `employment_type`,
-  `trial_or_probation_type`, `trial_length`/`probation_length`, `teams`,
-  `primary_cost_centre`, `secondary_cost_centres`). Full PII field list and the
-  work-location-membership caveat are in [ALLOWLIST.md](ALLOWLIST.md).
+  "page_index", "item_per_page", "total_items", "total_pages"}}`; `item_per_page`
+  max 100. `client.py` already matches.
+- **Employee schema: CONFIRMED.** Real field names (`id` UUID; `start_date`,
+  `termination_date`, `status`, `employment_type`, `trial_or_probation_type`,
+  `trial_length`/`probation_length`, `teams`, cost centres). Full PII list in
+  [ALLOWLIST.md](ALLOWLIST.md). Endpoint: `/employees?member_type=`.
+- **Endpoint map + scoping: CONFIRMED** from the Postman collection. Org-scoped:
+  employees, leave_requests (date-filterable), leave_categories, rostered_shifts
+  (location/date/status-filterable), teams, teams/{id}/employees (headcount),
+  work_locations, cost_centres, certifications-needs-scope-we-lack. Per-employee:
+  timesheet_entries, leave_balances, certifications (the granted scope) — these
+  KPIs iterate employees. Field names from create bodies are in ALLOWLIST.md.
+- **`GET /organisations` exists** (`/v1/organisations`); the only open part is
+  whether the token's scope set permits it.
 
 ## Still to verify (pilot probe or admin docs view)
 
 - **Employee → work_location membership.** "service" = work_location, but the
   employee object documents only a legacy `location` *string* plus `teams` and
-  cost centres. Confirm how to group employees by work location.
-- **Leave / timesheet / roster schemas.** These sections of the single-page
-  reference did not extract; confirm `leave_requests` fields (the sickness
-  category name field, `start_date`/`end_date`/`total_hours`/`status`), the leave
-  endpoint path (org-scoped vs `/employees/leave`), and the timesheet/roster
-  fields. The `verify_api_schema` tool returns exactly these (names + types, no
-  values).
-- **Tenant specifics.** Your leave category names (for the sickness mapping) and
-  whether `GET /organisations` works without an organisations scope.
+  cost centres, and the employees endpoint has no location filter. Confirm how to
+  group employee-level KPIs (headcount/turnover) by work location. Roster/cost
+  KPIs already filter by `location_ids`, so those are fine.
+- **Exact response fields + status enums.** Create-body field names are known;
+  confirm the response field names and the `status` value sets for leave_requests
+  and timesheets via `verify_api_schema`.
+- **Tenant specifics.** Your leave category names / `leave_type` values (for the
+  sickness mapping) and whether `GET /organisations` is permitted.
 - **Sickness denominator.** Absence *rate* needs an FTE/contracted-hours figure
   the leave API does not cleanly provide; until settled, report absolute sick
   hours/days rather than a rate.

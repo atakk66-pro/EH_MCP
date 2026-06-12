@@ -112,11 +112,16 @@ one code path parses employee records.
 
 ### Leave requests (`leave_requests:list`, `leave_categories:list`)
 
+Endpoint `GET /api/v1/organisations/{org}/leave_requests?start_date=&end_date=`
+— org-scoped and date-filterable (confirmed from the Postman collection).
+Fields from the create body: `leave_category_id`, `start_date`, `end_date`,
+`hours_per_day` (array of `{date, hours}`; total hours = sum), `comment`.
+
 | | |
 |---|---|
-| Server-internal | `employee_id` (correlation), leave category id/name, `start_date`, `end_date`, `total_hours`, `status` |
+| Server-internal | `employee_id` (correlation), `leave_category_id` (name via `leave_categories:list`), `start_date`, `end_date`, `hours_per_day[].hours`, `status` |
 | Model-visible | per-service aggregates: sick hours/days, spell counts, long-term-absence counts, Bradford mean/max/over-threshold counts, leave taken vs entitlement |
-| Blocked | `reason` / comments / notes (free text, may contain health details), attachments, approver identity, per-person Bradford scores or absence histories |
+| Blocked | `comment` (free text, may contain health details), attachments, approver identity, per-person Bradford scores or absence histories |
 
 Which category names count as sickness vs annual comes from
 `kpi_config.yaml` (`sickness_categories`, `annual_leave_categories`), validated
@@ -138,19 +143,33 @@ Schema confirmed from the docs: `category` (object), `balance` (number),
 
 ### Certifications (`employees_certifications:list`)
 
+Per-employee endpoint `GET /api/v1/organisations/{org}/employees/{id}/certifications`
+(the org-level `/certifications` endpoint needs a `certifications:list` scope we
+do NOT hold). Training compliance iterates employees.
+
 | | |
 |---|---|
 | Server-internal | `employee_id` (correlation), cert `name`/`type`, `status`, `expiry_date`, `completion_date` |
 | Model-visible | per-service compliance % (against the `mandatory_cert_names` / `safety_cert_names` config allowlists), counts compliant/total, counts expiring within the warning window |
 | Blocked | per-person certification lists or statuses, document/attachment fields, licence numbers |
 
-### Timesheets and rosters (Phase 2: `employees:timesheet_entries:list`, `rostered_shifts:list`, `employees:rostered_shifts:job_status`, `work_types:list`, `pay_categories:list`)
+### Timesheets and rosters (Phase 2)
+
+Endpoints (confirmed from the Postman collection):
+- Timesheets are **per-employee**:
+  `GET /api/v1/organisations/{org}/employees/{id}/timesheet_entries?start_date=&end_date=`
+  — care-hours KPIs iterate employees. Fields: `date`, `start_time`, `end_time`,
+  `units` (hours), `breaks[]`, `position_id`, `comment`.
+- Rostered shifts are **org-scoped and location-filterable**:
+  `GET /api/v1/organisations/{org}/rostered_shifts?from_date=&to_date=&statuses=&location_ids=&member_ids=`
+  — delivery/coverage by work location in one query. Fields: `start_date_time`,
+  `end_date_time`, `member_ids`, `breaks[]`, `notes`, `published`, status.
 
 | | |
 |---|---|
-| Server-internal | `employee_id` (correlation), shift/entry start/end times, units/hours, break, work location / work type / pay category ids, shift `job_status` |
+| Server-internal | `employee_id` / `member_ids` (correlation), shift/entry start/end times, `units`/hours, `breaks`, `location_ids`, `position_id`, work type / pay category ids, shift status |
 | Model-visible | per-service aggregates: total care hours, overtime % (via the pay-category mapping in config), rostered vs delivered hours, lateness % beyond the grace period, unfilled-shift counts |
-| Blocked | per-person rows, individual shift times tied to a person, notes/comments |
+| Blocked | per-person rows, individual shift times tied to a person, `notes`/`comment` free text |
 
 ### Shift cost (`employees:rostered_shifts:shift_cost:show`)
 

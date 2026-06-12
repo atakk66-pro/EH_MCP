@@ -32,3 +32,6 @@ Untitled Folder/
 
 # Built extension bundle (regenerate with `mcpb pack .`)
 *.mcpb
+
+# Reference Postman collection kept locally
+*.postman_collection.json
