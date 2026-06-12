@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "employment-hero-readonly",
   "display_name": "Employment Hero (read-only)",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Read-only Employment Hero access for Claude Desktop: aggregate, PII-minimising HR figures for care directors.",
   "long_description": "Connects Claude to your Employment Hero account, read-only. After installing, ask Claude to \"connect Employment Hero\" once to approve access in your browser, then ask for organisation, team, and work-location lists and headcount. No write access, and no individual employee fields (names, contact details, pay) are ever returned.",
   "author": {
@@ -27,7 +27,7 @@
         "PYTHONPATH": "${__dirname}/src",
         "EH_CLIENT_ID": "${user_config.client_id}",
         "EH_CLIENT_SECRET": "${user_config.client_secret}",
-        "EH_REDIRECT_URI": "https://127.0.0.1:${user_config.redirect_port}/callback",
+        "EH_REDIRECT_URI": "${user_config.redirect_uri}",
         "EH_SCOPES": "${user_config.scopes}",
         "EH_ORG_ID": "${user_config.organisation_id}",
         "EH_DEBUG_SCHEMA": "${user_config.debug_schema}",
@@ -82,14 +82,12 @@
       "required": false,
       "default": "cost_centres:list employees:list employees:show employees:onboard_polling_status employees_certifications:list employees:leave_balances:list employees:rostered_shifts:job_status employees:rostered_shifts:shift_cost:show employees:timesheet_entries:list employees:work_eligibility:show employing_entities:list leave_categories:list leave_requests:list leave_requests:show pay_categories:list rostered_shifts:list rostered_shifts:show teams:list teams:employees:list work_locations:list work_sites:list work_types:list"
     },
-    "redirect_port": {
-      "type": "number",
-      "title": "Sign-in callback port",
-      "description": "Local port used during browser sign-in. Must match the redirect URI registered on your EH app (default 8765).",
+    "redirect_uri": {
+      "type": "string",
+      "title": "Sign-in redirect URL",
+      "description": "The hosted callback page URL, which must exactly match the Redirect URI registered on your EH app.",
       "required": false,
-      "default": 8765,
-      "min": 1024,
-      "max": 65535
+      "default": "https://atakk66-pro.github.io/eh-callback/"
     },
     "debug_schema": {
       "type": "boolean",

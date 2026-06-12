@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Employment Hero sign-in</title>
+<!--
+  Static OAuth callback page for the Employment Hero read-only MCP server.
+  It reads the one-time authorization code from the URL in the browser and
+  shows it for the user to copy back into Claude. It makes NO network calls,
+  loads NO third-party scripts, and stores nothing. The code is single-use,
+  short-lived, and useless without the client secret (which is never here).
+-->
+<style>
+  body { font-family: system-ui, "Segoe UI", Arial, sans-serif; max-width: 640px;
+         margin: 48px auto; padding: 0 20px; color: #18181b; line-height: 1.5; }
+  h2 { margin-bottom: 4px; }
+  .code { font-family: ui-monospace, Consolas, monospace; font-size: 17px;
+          background: #f4f4f5; border: 1px solid #d4d4d8; border-radius: 8px;
+          padding: 14px; word-break: break-all; margin: 14px 0; }
+  button { font-size: 16px; padding: 10px 18px; border: 0; border-radius: 8px;
+           background: #6d28d9; color: #fff; cursor: pointer; }
+  button:hover { background: #5b21b6; }
+  .err { color: #b91c1c; }
+  .ok { color: #15803d; }
+  .muted { color: #71717a; font-size: 14px; }
+</style>
+</head>
+<body>
+  <h2>Employment Hero sign-in</h2>
+  <div id="out"></div>
+  <p class="muted">You can close this tab once you have copied the code.</p>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get("code");
+      var err = params.get("error");
+      var out = document.getElementById("out");
+      function clean(s) { return String(s).replace(/[<>&"]/g, ""); }
+
+      if (code) {
+        out.innerHTML =
+          '<p class="ok">Sign-in approved. Copy this code and paste it back into Claude:</p>'
+          + '<div class="code">' + clean(code) + "</div>"
+          + '<button id="copy">Copy code</button>'
+          + "<p>Then, in Claude, say: <em>complete the Employment Hero sign-in with</em> "
+          + "(paste the code).</p>";
+        document.getElementById("copy").onclick = function () {
+          navigator.clipboard.writeText(code).then(function () {
+            document.getElementById("copy").textContent = "Copied";
+          }, function () {});
+        };
+      } else if (err) {
+        out.innerHTML = '<p class="err">Sign-in was not completed (' + clean(err)
+          + "). Go back to Claude and ask to connect Employment Hero again.</p>";
+      } else {
+        out.innerHTML = "<p>Start the sign-in from Claude (ask it to connect "
+          + "Employment Hero); this page only works as the redirect of that flow.</p>";
+      }
+    })();
+  </script>
+</body>
+</html>

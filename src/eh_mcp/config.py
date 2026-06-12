@@ -13,9 +13,12 @@ load_dotenv(override=False)
 
 DEFAULT_API_BASE = "https://api.employmenthero.com"
 DEFAULT_OAUTH_BASE = "https://oauth.employmenthero.com"
-# Employment Hero requires an https redirect URI. The local sign-in listener
-# serves TLS with a self-signed cert (see oauth_flow.ensure_self_signed_cert).
-DEFAULT_REDIRECT_URI = "https://127.0.0.1:8765/callback"
+# The redirect URI must be (a) registered on the EH app and (b) acceptable to
+# EH's firewall. EH's WAF blocks 127.0.0.1, and the portal rejects `localhost`,
+# so we use a hosted static callback page (see callback-page/index.html) that
+# shows the one-time code for the user to copy. Override per install with
+# EH_REDIRECT_URI / the extension's redirect-URL setting.
+DEFAULT_REDIRECT_URI = "https://atakk66-pro.github.io/eh-callback/"
 # The exact scopes configured on the registered EH app ("NobleCare KPI Reader",
 # from its View Application page). EH's real scope format is resource:action,
 # not the urn:mainapp:...:read form shown in some docs. All are read-only, and

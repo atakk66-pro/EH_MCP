@@ -87,18 +87,24 @@ themselves.
 
 ### Redirect URI
 
-Employment Hero requires an **https** redirect URI. Enter exactly:
+Employment Hero requires an **https** redirect URI, and two loopback options are
+ruled out: EH's firewall (AWS WAF) blocks any request whose `redirect_uri`
+contains the literal IP `127.0.0.1`, and the Developer Portal rejects
+`localhost`. So the redirect is a **hosted static page** that displays the
+one-time sign-in code for the user to copy.
+
+Host `callback-page/index.html` (a single, dependency-free file) on any static
+HTTPS host, e.g. GitHub Pages, and register that URL on the EH app. The default
+used by this project is:
 
 ```
-https://127.0.0.1:8765/callback
+https://atakk66-pro.github.io/eh-callback/
 ```
 
-This is a local address, not a website, so there is nothing to host. The
-extension's sign-in listener serves it over TLS using a self-signed certificate
-generated on the machine, so the browser shows a one-time "your connection is
-not private" warning that the user clicks through (see [docs/INSTALL.md](docs/INSTALL.md)).
-Whatever you register here must match the extension's callback port (default
-8765) and `EH_REDIRECT_URI` in the manual install.
+The page makes no network calls and stores nothing; it only reads the code from
+the URL in the browser and shows it. The code is single-use and useless without
+the Client Secret. Whatever you register here must exactly match the extension's
+`redirect_uri` setting (and `EH_REDIRECT_URI` in the manual install).
 
 ### Administrator role required
 
@@ -143,10 +149,10 @@ is click-through, with no Python, `pip`, or config files. Full step-by-step:
 
 1. Build the bundle once (you, the maintainer):
    ```bash
-   # name it after the manifest.json version, e.g. 0.4.1:
-   npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.4.1.mcpb"
+   # name it after the manifest.json version, e.g. 0.4.2:
+   npx -y @anthropic-ai/mcpb pack . "employment-hero-readonly-0.4.2.mcpb"
    ```
-   Or just push a `v0.4.1` tag and let the release workflow build and publish it.
+   Or just push a `v0.4.2` tag and let the release workflow build and publish it.
    (~20 KB; uses the `uv` server type, so Claude Desktop provisions Python and
    dependencies itself.)
 2. Send that one file to each director.
