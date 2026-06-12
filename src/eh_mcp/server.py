@@ -254,13 +254,16 @@ _SCHEMA_ENDPOINTS = {
 }
 
 
-async def verify_api_schema(resource: str) -> dict:
+async def verify_api_schema(
+    resource: str, organisation_id: str | None = None
+) -> dict:
     """[Developer setup] Report the STRUCTURE of one Employment Hero list
     endpoint: field names and value types only, never any values, so no
     personal data is returned. Use this once after connecting to confirm the
-    live API shape. resource must be one of the configured endpoint names.
+    live API shape. resource must be one of the configured endpoint names;
+    organisation_id defaults to the configured one.
     """
-    logger.info("tool verify_api_schema resource=%s", resource)
+    logger.info("tool verify_api_schema resource=%s org=%s", resource, organisation_id)
     if resource not in _SCHEMA_ENDPOINTS:
         return {
             "error": f"Unknown resource '{resource}'.",
@@ -272,7 +275,7 @@ async def verify_api_schema(resource: str) -> dict:
             settings = load_settings()
             template = _SCHEMA_ENDPOINTS[resource]
             if "{org}" in template:
-                template = template.format(org=_resolve_org(settings, None))
+                template = template.format(org=_resolve_org(settings, organisation_id))
             payload = _get_client().sample(template)
             return {"resource": resource, "ok": True, "schema": type_skeleton(payload)}
         except (EHError, RuntimeError) as exc:
