@@ -4,12 +4,13 @@ Only GET requests are made. The client handles pagination and the common
 response envelope, retries transient failures (401 re-auth, 429 and 5xx with
 backoff), and translates other failures into clean EHError messages.
 
-Response shape assumption: list endpoints return
+Response envelope (confirmed against developer.employmenthero.com/api-references):
 
-    {"data": {"items": [...], "total_pages": N, "total_items": M, ...}}
+    {"data": {"items": [...], "page_index": 1, "item_per_page": 20,
+              "total_items": 50, "total_pages": 3}}
 
-Some endpoints may return the list directly under "data". Both are handled.
-Verify against the live API reference for your account before relying on it.
+with page_index (min 1) and item_per_page (default 20, max 100). A bare list
+directly under "data" is also handled defensively.
 """
 
 from __future__ import annotations

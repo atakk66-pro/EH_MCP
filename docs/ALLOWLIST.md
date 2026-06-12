@@ -92,9 +92,20 @@ blocked.
 
 | | |
 |---|---|
-| Server-internal | `id` (correlation only), `start_date`, `termination_date`, `status`/`employment_status`, `employment_type`, probation fields (`probation_length`, `trial_or_probation_type`), membership ids (team / work_location / cost_centre), `job_title` (grouping only) |
+| Server-internal | `id` (UUID, correlation only), `start_date`, `termination_date`, `status` (active/inactive/archived/terminated), `employment_type`, `trial_or_probation_type`, `trial_length` (days), `probation_length` (months), `teams` [{id,name}], `primary_cost_centre`/`secondary_cost_centres`, `location` (legacy work-location string), `job_title` |
 | Model-visible | **nothing per-person.** Only aggregates: headcounts, turnover/retention rates, tenure-band counts, starters/leavers counts, probation counts — always per service or org-total |
-| Blocked | first/last name, any name field, email, phone, DOB, gender, marital status, address fields, salary/pay fields, TFN/NI/tax fields, bank fields, emergency contacts, photo, `termination_summary` free text and termination reason |
+| Blocked (confirmed against the docs, all PII) | `first_name`, `last_name`, `middle_name`, `full_name`, `full_legal_name`, `legal_name`, `known_as`, `title`, `pronouns`, `date_of_birth`, `account_email`/`email`/`personal_email`/`company_email`, `personal_mobile_number`/`company_mobile`/`company_landline`/`home_phone`, `address`/`residential_address`/`postal_address`, `gender`, `marital_status`, `nationality`, `abn`, `uk_tax_and_national_insurance` (UTR + NI number), `avatar_url`, `biography`, `termination_summary` (free-text reason), managers |
+
+The full Employee schema is confirmed against the API reference. Two notes for
+the KPI build:
+- `id` is a **UUID string**, not an int (the allowlist mappers already coerce
+  with `str()`).
+- The employee object's grouping fields are `teams`, cost centres, and a legacy
+  `location` **string** — there is no documented `work_location_id` on the
+  employee. Since "service" = work_location here, confirm during the pilot how an
+  employee maps to a work location (the `location` string vs a separate
+  membership endpoint); if only the string is available, group on it and resolve
+  names via `work_locations:list`.
 
 `employees:show` adds nothing the KPIs need; prefer `employees:list` so only
 one code path parses employee records.

@@ -124,15 +124,30 @@ uncertainties:
   (B7). The registered app's actual 22 scopes (resource:action format) are
   catalogued in [ALLOWLIST.md](ALLOWLIST.md).
 
-## Key uncertainties to verify first
+## Confirmed from the API reference (developer.employmenthero.com/api-references)
 
-- **Scope strings: RESOLVED.** The app's View Application page shows them in
-  `resource:action` form; the 22 configured scopes are now the `EH_SCOPES`
-  defaults and are catalogued in [ALLOWLIST.md](ALLOWLIST.md).
-- **Field names.** `start_date`, `termination_date`, `probation_length`,
-  `trial_or_probation_type`, `leave_category_name`, `total_hours`, cert
-  `expiry_date`/`status`, and the `{"data": {"items": [...]}}` envelope are all
-  documentation-derived. Confirm casing and nesting on a live response.
+- **Envelope and pagination: CONFIRMED.** `{"data": {"items": [...],
+  "page_index", "item_per_page", "total_items", "total_pages"}}`; `page_index`
+  min 1, `item_per_page` default 20 / max 100. `client.py` already matches.
+- **Employee schema: CONFIRMED.** Real field names known (`id` is a UUID;
+  `start_date`, `termination_date`, `status`, `employment_type`,
+  `trial_or_probation_type`, `trial_length`/`probation_length`, `teams`,
+  `primary_cost_centre`, `secondary_cost_centres`). Full PII field list and the
+  work-location-membership caveat are in [ALLOWLIST.md](ALLOWLIST.md).
+
+## Still to verify (pilot probe or admin docs view)
+
+- **Employee → work_location membership.** "service" = work_location, but the
+  employee object documents only a legacy `location` *string* plus `teams` and
+  cost centres. Confirm how to group employees by work location.
+- **Leave / timesheet / roster schemas.** These sections of the single-page
+  reference did not extract; confirm `leave_requests` fields (the sickness
+  category name field, `start_date`/`end_date`/`total_hours`/`status`), the leave
+  endpoint path (org-scoped vs `/employees/leave`), and the timesheet/roster
+  fields. The `verify_api_schema` tool returns exactly these (names + types, no
+  values).
+- **Tenant specifics.** Your leave category names (for the sickness mapping) and
+  whether `GET /organisations` works without an organisations scope.
 - **Sickness denominator.** Absence *rate* needs an FTE/contracted-hours figure
-  the leave API does not cleanly provide; until that is settled, report absolute
-  sick hours/days rather than a rate.
+  the leave API does not cleanly provide; until settled, report absolute sick
+  hours/days rather than a rate.
